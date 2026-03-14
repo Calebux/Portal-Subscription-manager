@@ -1,0 +1,24 @@
+# Secrets
+.env
+*.env
+
+# User data (real subscription records)
+user-data/
+
+# Logs
+logs/
+
+# Sessions
+sessions/
+
+# Cache
+fx-cache.json
+gateway.pid
+*.pyc
+__pycache__/
+
+# Hermes core (upstream dependency)
+hermes-agent/
+
+# macOS
+.DS_Store
