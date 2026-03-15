@@ -226,13 +226,25 @@ def to_hermes_subscription(record: dict) -> dict:
     merchant = record["merchant"]
     slug = re.sub(r"[^a-z0-9]", "-", merchant.lower()).strip("-")
 
+    amount = record.get("amount") or 0
+    currency = record.get("currency", "USD")
+
+    # Pre-calculate USD equivalent so the agent always has it
+    try:
+        sys.path.insert(0, str(Path.home() / ".hermes"))
+        from currency import to_usd
+        monthly_cost_usd = round(to_usd(amount, currency), 2)
+    except Exception:
+        monthly_cost_usd = amount if currency == "USD" else 0
+
     return {
         "id": slug,
         "name": merchant,
         "provider": merchant,
         "category": "other",  # agent will refine this
-        "monthly_cost": record.get("amount") or 0,
-        "currency": record.get("currency", "USD"),
+        "monthly_cost": amount,
+        "monthly_cost_usd": monthly_cost_usd,
+        "currency": currency,
         "billing_cycle": "monthly",
         "next_renewal": str(next_renewal),
         "status": record.get("status", "active"),
