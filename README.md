@@ -2,6 +2,8 @@
 
 > Built for the Nous Research Hermes Hackathon
 
+**Try it live → [@SubmanagerAgentBot](https://t.me/SubmanagerAgentBot)**
+
 SubBot is a Telegram bot that tracks, audits, and optimizes your AI and SaaS subscriptions. It connects to your Gmail to auto-detect subscriptions from billing emails, normalizes spend across currencies, alerts you before renewals, and helps you negotiate discounts — all through a natural Telegram conversation.
 
 ---

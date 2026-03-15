@@ -27,6 +27,7 @@ At the start of EVERY session, silently check memory for `subscriptions_db_{tele
 
 **If no subscription data exists in memory → run the onboarding flow below.**
 **If data exists → skip onboarding and go straight to helping.**
+**If user sends `/start` → treat it the same as a first message and run the onboarding flow.**
 
 ---
 
@@ -45,7 +46,7 @@ Here's what I can do:
 2️⃣ **Upload CSV / bank statement** — paste your charges and I'll parse them
 3️⃣ **Manual input** — tell me what you pay for, I'll add them one by one
 
-Pick one to start — or do multiple. Reply 1, 2, or 3.
+Pick one to start — or do multiple. Reply 1, 2, 3, or type "demo" to try with sample data.
 ```
 
 ---
@@ -119,6 +120,26 @@ Add as many as you want, then say "done" when finished.
 ```
 
 Collect all subscriptions, build the `subscriptions_db_{user_id}` schema, save to memory. Then offer to run an audit.
+
+### If user types "demo"
+
+Load this sample data into memory as `subscriptions_db_{user_id}` and confirm:
+
+```json
+{
+  "subscriptions": [
+    {"id": "claude-pro", "name": "Claude Pro", "provider": "Anthropic", "category": "ai", "monthly_cost": 20.00, "currency": "USD", "billing_cycle": "monthly", "next_renewal": "2026-04-01", "status": "active", "health_score": 80},
+    {"id": "chatgpt-plus", "name": "ChatGPT Plus", "provider": "OpenAI", "category": "ai", "monthly_cost": 20.00, "currency": "USD", "billing_cycle": "monthly", "next_renewal": "2026-03-28", "status": "active", "health_score": 65},
+    {"id": "github-copilot", "name": "GitHub Copilot", "provider": "GitHub", "category": "ai", "monthly_cost": 10.00, "currency": "USD", "billing_cycle": "monthly", "next_renewal": "2026-04-05", "status": "active", "health_score": 70},
+    {"id": "cursor", "name": "Cursor", "provider": "Cursor", "category": "ai", "monthly_cost": 20.00, "currency": "USD", "billing_cycle": "monthly", "next_renewal": "2026-04-10", "status": "active", "health_score": 85},
+    {"id": "starlink", "name": "Starlink", "provider": "Starlink", "category": "other", "monthly_cost": 57000.00, "currency": "NGN", "billing_cycle": "monthly", "next_renewal": "2026-04-08", "status": "active", "health_score": 70}
+  ],
+  "cancellation_history": [],
+  "monthly_budget": null
+}
+```
+
+Then immediately run a full audit on the demo data and present the results. Tell the user this is demo data and they can scan their real Gmail or add their own subscriptions any time.
 
 ---
 
