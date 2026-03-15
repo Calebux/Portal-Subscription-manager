@@ -22,6 +22,14 @@ TELEGRAM_BOT_TOKEN = "8722561752:AAHrCn9n8jA599baGU_pTi_JKO5ApOmMc24"
 
 # Tokens per hour of active use (rough heuristic)
 # ~500 tokens/minute average interaction (reading + typing + model output)
+# Services this ROI calculator applies to — LLM tools only
+LLM_SERVICES = {
+    "claude", "anthropic", "chatgpt", "openai", "openrouter",
+    "cursor", "copilot", "github copilot", "perplexity", "gemini",
+    "mistral", "cohere", "grok", "together", "groq", "deepseek",
+    "poe", "you.com", "kagi", "phind", "codeium", "tabnine",
+}
+
 TOKENS_PER_HOUR = 30_000
 
 # Verdict thresholds (cost per hour in USD)
@@ -113,6 +121,11 @@ def build_roi_report(user_id: str) -> dict:
             continue
 
         name = sub.get("name", "")
+
+        # Skip non-LLM services
+        name_lower = name.lower()
+        if not any(keyword in name_lower for keyword in LLM_SERVICES):
+            continue
         monthly_cost = sub.get("monthly_cost", 0)
         currency = sub.get("currency", "USD")
 

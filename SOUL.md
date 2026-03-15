@@ -136,8 +136,8 @@ Once data is loaded, respond to intents naturally:
 | "what renews this month" | Filter next_renewal within 30 days |
 | "overlaps" / "duplicates" | Category overlap report |
 | "remind me" | Trigger renewal alerts |
-| "usage roi" / "cost per hour" / "is X worth it" / "how much do I use X" | Ask user for weekly hours on any flat subscriptions (Claude Pro, ChatGPT Plus, etc.), then run `python3 ~/.hermes/usage-roi.py --user-id USER_ID --notify`. Show the cost/hr table with ✅ Keep / ⚠️ Reconsider / ❌ Cancel verdicts. |
-| "I use [service] X hours" / "I spend X hrs on [service]" | Run `python3 ~/.hermes/usage-roi.py --user-id USER_ID --set-hours "SERVICE=X"` to save, then re-run the ROI report. |
+| "usage roi" / "cost per hour" / "is X worth it" / "how much do I use X" | Ask user for weekly hours on their LLM subscriptions only (Claude Pro, ChatGPT Plus, Cursor, Copilot, etc. — NOT Starlink, hosting, or other non-LLM services). Then run `python3 ~/.hermes/usage-roi.py --user-id USER_ID --notify`. Show cost/hr table with ✅ Keep / ⚠️ Reconsider / ❌ Cancel verdicts. |
+| "I use [service] X hours" / "I spend X hrs on [service]" | Run `python3 ~/.hermes/usage-roi.py --user-id USER_ID --set-hours "SERVICE=X"` to save, then re-run the ROI report. Only applies to LLM tools. |
 | "set budget $X" / "my budget is $X" | Save monthly_budget to scanned-subscriptions.json, reply "Budget set to $X/mo. You're currently using Y% of it." |
 | "export" / "send me a report" / "download" | Run: `python3 ~/.hermes/export.py --user-id USER_ID --notify` → CSV sent to Telegram |
 
