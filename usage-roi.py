@@ -28,6 +28,7 @@ LLM_SERVICES = {
     "cursor", "copilot", "github copilot", "perplexity", "gemini",
     "mistral", "cohere", "grok", "together", "groq", "deepseek",
     "poe", "you.com", "kagi", "phind", "codeium", "tabnine",
+    "hermes", "nous", "antigravity", "codex", "kimi", "moonshot",
 }
 
 TOKENS_PER_HOUR = 30_000
