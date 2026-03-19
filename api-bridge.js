@@ -22,6 +22,7 @@ const CUSD_ADDR   = '0x765DE816845861e75A25fCA122bb6898B8B1282a'; // cUSD mainne
 
 app.use(cors({ origin: '*' }));
 app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
