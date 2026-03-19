@@ -1,6 +1,6 @@
 /* popup.js — SubBot Extension (view layer for @SubmanagerAgentBot) */
 
-const API            = 'https://subbot-bridge.up.railway.app';
+const API            = 'https://portal-subscription-manager-production.up.railway.app';
 const BOT_USERNAME   = 'SubmanagerAgentBot';
 // TODO: replace with your real project Celo wallet address
 const PROJECT_WALLET = '0xA6F46Dcaa07C6b56D02379Ec3b2AafDFe3BA0DfA';
