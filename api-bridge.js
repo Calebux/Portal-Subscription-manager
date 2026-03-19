@@ -84,6 +84,15 @@ async function getCUSDBalance(address) {
 // Health check
 app.get('/health', (req, res) => res.json({ ok: true, version: '1.0' }));
 
+// Bulk sync — bot pushes full data file to Railway after every update
+app.post('/sync', (req, res) => {
+  const { userId = 'local', data } = req.body;
+  if (!data) return res.status(400).json({ error: 'data required' });
+  const file = path.join(userDir(userId), 'scanned-subscriptions.json');
+  writeJSON(file, data);
+  res.json({ ok: true, count: (data.subscriptions || []).length });
+});
+
 // Get subscriptions
 app.get('/subs', (req, res) => {
   const userId = req.query.userId || 'local';
