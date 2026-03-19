@@ -1,0 +1,14 @@
+{
+  "name": "subbot-api-bridge",
+  "version": "1.0.0",
+  "description": "Local API bridge connecting SubBot browser extension to the Hermes agent",
+  "main": "api-bridge.js",
+  "scripts": {
+    "start": "node api-bridge.js",
+    "dev": "node --watch api-bridge.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2"
+  }
+}
