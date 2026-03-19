@@ -22,3 +22,10 @@ hermes-agent/
 
 # macOS
 .DS_Store
+
+# Dependencies
+node_modules/
+
+# Build artifacts
+*.zip
+stitch/

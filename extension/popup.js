@@ -520,26 +520,37 @@ function showAddSubModal() {
   document.getElementById('modal-add-sub')?.classList.add('active');
 }
 
-function saveManualSub() {
+async function saveManualSub() {
   const name = document.getElementById('add-sub-name')?.value?.trim();
   const cost = parseFloat(document.getElementById('add-sub-cost')?.value);
   if (!name) { toast('Name is required'); return; }
   if (isNaN(cost) || cost < 0) { toast('Enter a valid cost'); return; }
 
   const sub = {
-    id:           'manual-' + Date.now(),
+    id:              'manual-' + Date.now(),
     name,
-    provider:     document.getElementById('add-sub-provider')?.value?.trim() || name,
-    category:     document.getElementById('add-sub-category')?.value || 'saas',
-    monthly_cost: cost,
+    provider:        document.getElementById('add-sub-provider')?.value?.trim() || name,
+    category:        document.getElementById('add-sub-category')?.value || 'saas',
+    monthly_cost:    cost,
     monthly_cost_usd: cost,
-    currency:     (document.getElementById('add-sub-currency')?.value?.trim() || 'USD').toUpperCase(),
-    next_renewal: document.getElementById('add-sub-renewal')?.value || null,
-    status:       'active',
-    health_score: 70,
-    source:       'manual',
+    currency:        (document.getElementById('add-sub-currency')?.value?.trim() || 'USD').toUpperCase(),
+    next_renewal:    document.getElementById('add-sub-renewal')?.value || null,
+    status:          'active',
+    health_score:    70,
+    source:          'manual',
   };
 
+  // Save to bridge (persists for all devices with same userId)
+  try {
+    await fetch(`${API}/add-sub`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sub, userId: userId() }),
+      signal: AbortSignal.timeout(4000),
+    });
+  } catch(e) {}
+
+  // Also update local state immediately
   state.subscriptions = [...(state.subscriptions || []), sub];
   saveState();
   document.getElementById('modal-add-sub')?.classList.remove('active');

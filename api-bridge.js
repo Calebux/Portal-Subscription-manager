@@ -19,17 +19,6 @@ const USER_DATA   = path.join(HERMES_HOME, 'user-data');
 const CELO_RPC    = 'https://rpc.ankr.com/celo';
 const CUSD_ADDR   = '0x765DE816845861e75A25fCA122bb6898B8B1282a'; // cUSD mainnet
 
-const DEMO_DATA = {
-  subscriptions: [
-    { id: 'claude-pro', name: 'Claude Pro', provider: 'Anthropic', category: 'ai', monthly_cost: 20, monthly_cost_usd: 20, currency: 'USD', billing_cycle: 'monthly', next_renewal: new Date(Date.now() + 12 * 86400000).toISOString().slice(0,10), status: 'active', health_score: 85 },
-    { id: 'chatgpt-plus', name: 'ChatGPT Plus', provider: 'OpenAI', category: 'ai', monthly_cost: 20, monthly_cost_usd: 20, currency: 'USD', billing_cycle: 'monthly', next_renewal: new Date(Date.now() + 9 * 86400000).toISOString().slice(0,10), status: 'active', health_score: 65 },
-    { id: 'github-copilot', name: 'GitHub Copilot', provider: 'GitHub', category: 'ai', monthly_cost: 10, monthly_cost_usd: 10, currency: 'USD', billing_cycle: 'monthly', next_renewal: new Date(Date.now() + 16 * 86400000).toISOString().slice(0,10), status: 'active', health_score: 78 },
-    { id: 'cursor', name: 'Cursor', provider: 'Cursor', category: 'ai', monthly_cost: 20, monthly_cost_usd: 20, currency: 'USD', billing_cycle: 'monthly', next_renewal: new Date(Date.now() + 21 * 86400000).toISOString().slice(0,10), status: 'active', health_score: 90 },
-    { id: 'starlink', name: 'Starlink', provider: 'SpaceX', category: 'other', monthly_cost: 41.55, monthly_cost_usd: 41.55, currency: 'USD', billing_cycle: 'monthly', next_renewal: new Date(Date.now() + 20 * 86400000).toISOString().slice(0,10), status: 'active', health_score: 70 },
-  ],
-  cancellation_history: [],
-  monthly_budget: 120,
-};
 
 app.use(cors({ origin: '*' }));
 app.use(express.json());
@@ -99,7 +88,20 @@ app.get('/subs', (req, res) => {
   const userId = req.query.userId || 'local';
   const file   = path.join(userDir(userId), 'scanned-subscriptions.json');
   const data   = readJSON(file);
-  res.json(data || DEMO_DATA);
+  res.json(data || { subscriptions: [], cancellation_history: [], monthly_budget: null });
+});
+
+// Add a single subscription (from extension manual add)
+app.post('/add-sub', (req, res) => {
+  const { sub, userId = 'local' } = req.body;
+  if (!sub || !sub.name) return res.status(400).json({ error: 'sub.name required' });
+  const file = path.join(userDir(userId), 'scanned-subscriptions.json');
+  const data = readJSON(file) || { subscriptions: [], cancellation_history: [], monthly_budget: null };
+  // Avoid duplicates by id
+  data.subscriptions = data.subscriptions.filter(s => s.id !== sub.id);
+  data.subscriptions.push(sub);
+  writeJSON(file, data);
+  res.json({ ok: true, count: data.subscriptions.length });
 });
 
 // Scan Gmail inbox

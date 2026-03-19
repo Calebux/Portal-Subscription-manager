@@ -19,6 +19,16 @@ rm -f "$HERMES_HOME/gateway.pid"
 # Small wait to ensure port/socket is released
 sleep 1
 
+# Start the SubBot API bridge (browser extension backend) in background
+BRIDGE_DIR="$HOME/Portal-Subscription-manager"
+if [ -f "$BRIDGE_DIR/api-bridge.js" ]; then
+    # Kill any stale bridge
+    pkill -f "api-bridge.js" 2>/dev/null
+    sleep 0.5
+    cd "$BRIDGE_DIR" && node api-bridge.js >> "$HERMES_HOME/logs/bridge.log" 2>&1 &
+    echo "[$(date)] api-bridge.js started (PID $!)" >> "$LOG"
+fi
+
 # Start the gateway
 exec "$HERMES_HOME/hermes-agent/venv/bin/python" \
     -m hermes_cli.main gateway run
