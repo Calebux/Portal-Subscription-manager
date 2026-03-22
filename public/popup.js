@@ -119,6 +119,10 @@ function shortAddr(addr) {
 
 function copyProjectAddr() {
   navigator.clipboard.writeText(PROJECT_WALLET).then(() => toast('Address copied!'));
+  if (name === 'copyVaultAddr') {
+    const addr = document.getElementById('vault-addr')?.textContent || PROJECT_WALLET;
+    navigator.clipboard.writeText(addr).then(() => toast('Vault address copied!'));
+  }
 }
 
 function showQRModal() {
@@ -416,13 +420,72 @@ function copyNegotiationEmail() {
   });
 }
 
-// ── Credits ───────────────────────────────────────────────────────────────
+// ── Vault / Credits ───────────────────────────────────────────────────────
 function refreshCredits() {
-  document.getElementById('credits-balance').textContent = (state.balance || 0).toFixed(2);
-  const addrEl = document.getElementById('qr-addr');
-  if (addrEl) addrEl.textContent = shortAddr(PROJECT_WALLET);
-  drawQR('credits-qr', PROJECT_WALLET);
   renderTxHistory();
+  loadVault();
+}
+
+async function loadVault() {
+  const userId = state.telegramUserId;
+
+  // Show vault address regardless
+  const vaultAddrEl = document.getElementById('vault-addr');
+
+  try {
+    const r    = await fetch(`${API}/vault/${userId || 'local'}`);
+    const data = await r.json();
+
+    if (data.error || data.configured === false) {
+      // Vault not configured — fall back to wallet balance display
+      if (vaultAddrEl) vaultAddrEl.textContent = PROJECT_WALLET;
+      return;
+    }
+
+    // Show vault address
+    if (vaultAddrEl) vaultAddrEl.textContent = data.vaultAddress || PROJECT_WALLET;
+
+    // Principal
+    const principalEl = document.getElementById('vault-principal');
+    if (principalEl) principalEl.textContent = parseFloat(data.principal || 0).toFixed(3);
+
+    // Yield earned (total + pending)
+    const totalYield = parseFloat(data.totalYieldEarned || 0) + parseFloat(data.pending || 0);
+    const yieldEl    = document.getElementById('vault-yield');
+    if (yieldEl) yieldEl.textContent = totalYield.toFixed(4);
+
+    // Credits available
+    const credits    = parseFloat(data.credits || 0) + parseFloat(data.pending || 0);
+    const creditsEl  = document.getElementById('vault-credits');
+    if (creditsEl) creditsEl.textContent = credits.toFixed(4);
+
+    // Self-sustaining badge
+    const badge = document.getElementById('vault-status-badge');
+    if (badge) {
+      if (data.selfSustaining) {
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+        const tagline = document.getElementById('vault-tagline');
+        if (tagline) {
+          const principal = parseFloat(data.principal || 0);
+          const needed    = Math.max(0, 25 - principal).toFixed(0);
+          tagline.textContent = principal > 0
+            ? `Deposit ${needed} more cUSD to reach self-sustaining threshold (25 cUSD).`
+            : 'Deposit 25 cUSD once — yield pays for all operations forever.';
+        }
+      }
+    }
+
+    // Update the dashboard credits strip if principal > 0
+    const strip = document.getElementById('strip-balance');
+    if (strip && parseFloat(data.principal) > 0) {
+      strip.textContent = `${parseFloat(data.principal).toFixed(2)} cUSD`;
+    }
+
+  } catch (_) {
+    if (vaultAddrEl) vaultAddrEl.textContent = PROJECT_WALLET;
+  }
 }
 
 function renderTxHistory() {

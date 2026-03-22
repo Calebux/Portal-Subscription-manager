@@ -269,53 +269,88 @@
 
 <!-- SCREEN: CREDITS -->
 <div id="screen-credits" class="screen bg-surface">
-  <div class="screen-scroll pt-[52px] pb-[56px] px-4 space-y-5">
-    <div class="relative w-full rounded-xl overflow-hidden gold-border p-5 flex flex-col justify-between amber-glow bg-gradient-to-br from-surface-container-high to-surface-container-lowest mt-2" style="min-height:120px;">
-      <div class="flex justify-between items-start">
+  <div class="screen-scroll pt-[52px] pb-[56px] px-4 space-y-4">
+
+    <!-- Vault hero card -->
+    <div id="vault-card" class="relative w-full rounded-2xl overflow-hidden gold-border p-5 flex flex-col gap-3 amber-glow bg-gradient-to-br from-surface-container-high to-surface-container-lowest mt-2">
+      <div class="flex justify-between items-center">
         <div class="flex items-center gap-2">
-          <div class="w-8 h-8 rounded-full bg-amber-400/20 flex items-center justify-center"><span class="material-symbols-outlined text-amber-500 text-lg" style="font-variation-settings:'FILL' 1">token</span></div>
-          <span class="text-xs font-mono text-amber-500 uppercase tracking-widest">Celo Mainnet · cUSD</span>
-        </div>
-      </div>
-      <div class="mt-3">
-        <span class="text-[10px] text-on-surface-variant uppercase tracking-widest">Your Balance</span>
-        <div class="flex items-baseline gap-2"><h1 id="credits-balance" class="text-3xl font-bold font-mono leading-none">0.00</h1><span class="text-amber-500 font-mono font-medium">cUSD</span></div>
-      </div>
-      <p class="text-[10px] text-on-surface-variant mt-2">Managed by your Telegram bot · syncs automatically</p>
-    </div>
-    <section>
-      <div class="flex items-center gap-2 mb-3"><span class="w-1 h-3 bg-amber-500 rounded-full"></span><h2 class="text-xs font-bold uppercase tracking-widest text-on-surface-variant">How to Top Up</h2></div>
-      <div class="glass border border-outline-variant/10 rounded-2xl p-5 flex flex-col items-center gap-4">
-        <div class="bg-white p-3 rounded-2xl shadow-lg"><canvas id="credits-qr" width="140" height="140"></canvas></div>
-        <div class="w-full space-y-2">
-          <p class="text-[11px] text-on-surface-variant text-center leading-snug">Send any amount of <span class="text-on-surface font-semibold">cUSD</span> from <span class="text-primary">MiniPay</span> or <span class="text-primary">Valora</span> to this address, then confirm with your bot.</p>
-          <div class="flex items-center gap-2 p-3 bg-surface-container-lowest border border-outline-variant/10 rounded-xl">
-            <code id="qr-addr" class="text-[10px] font-mono text-secondary flex-1 truncate">—</code>
-            <button data-action="copyProjectAddr" class="text-on-surface-variant hover:text-primary flex-shrink-0"><span class="material-symbols-outlined text-lg">content_copy</span></button>
+          <div class="w-8 h-8 rounded-full bg-amber-400/20 flex items-center justify-center">
+            <span class="material-symbols-outlined text-amber-500 text-lg" style="font-variation-settings:'FILL' 1">savings</span>
           </div>
-          <button data-action="openBot" class="w-full py-2.5 rounded-xl bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-95">
-            <span class="material-symbols-outlined text-sm">send</span>Open Bot to Confirm
-          </button>
+          <span class="text-xs font-mono text-amber-500 uppercase tracking-widest">SubBot Vault · Celo</span>
+        </div>
+        <span id="vault-status-badge" class="hidden text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">● Self-sustaining</span>
+      </div>
+
+      <!-- Three stats -->
+      <div class="grid grid-cols-3 gap-2 mt-1">
+        <div class="bg-black/20 rounded-xl p-3 text-center">
+          <p class="text-[9px] text-on-surface-variant uppercase tracking-widest mb-1">Principal</p>
+          <p id="vault-principal" class="text-base font-bold font-mono text-on-surface leading-none">—</p>
+          <p class="text-[9px] text-amber-500 mt-0.5">cUSD · locked</p>
+        </div>
+        <div class="bg-black/20 rounded-xl p-3 text-center">
+          <p class="text-[9px] text-on-surface-variant uppercase tracking-widest mb-1">Yield Earned</p>
+          <p id="vault-yield" class="text-base font-bold font-mono text-emerald-400 leading-none">—</p>
+          <p class="text-[9px] text-on-surface-variant mt-0.5">10% APY</p>
+        </div>
+        <div class="bg-black/20 rounded-xl p-3 text-center">
+          <p class="text-[9px] text-on-surface-variant uppercase tracking-widest mb-1">Credits</p>
+          <p id="vault-credits" class="text-base font-bold font-mono text-primary leading-none">—</p>
+          <p class="text-[9px] text-on-surface-variant mt-0.5">spendable</p>
         </div>
       </div>
-    </section>
+
+      <p id="vault-tagline" class="text-[10px] text-on-surface-variant text-center leading-snug">
+        Deposit once — yield pays for all operations. Principal never touched.
+      </p>
+    </div>
+
+    <!-- Deposit section -->
     <section>
-      <div class="flex items-center gap-2 mb-3"><span class="w-1 h-3 bg-primary rounded-full"></span><h2 class="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Cost Per Action</h2></div>
-      <div class="bg-surface-container-low rounded-xl overflow-hidden border border-outline-variant/5">
-        <div class="flex justify-between px-4 py-2.5 border-b border-outline-variant/5"><span class="text-[10px] uppercase font-bold tracking-tighter text-on-surface-variant">Action</span><span class="text-[10px] uppercase font-bold tracking-tighter text-on-surface-variant">cUSD</span></div>
-        <div class="divide-y divide-outline-variant/5">
-          <div class="flex justify-between px-4 py-2.5"><span class="text-xs">Gmail Scan</span><span class="text-xs font-mono font-bold text-amber-500">0.10</span></div>
-          <div class="flex justify-between px-4 py-2.5"><span class="text-xs">AI Audit</span><span class="text-xs font-mono font-bold text-amber-500">0.05</span></div>
-          <div class="flex justify-between px-4 py-2.5"><span class="text-xs">Export CSV</span><span class="text-xs font-mono font-bold text-amber-500">0.05</span></div>
-          <div class="flex justify-between px-4 py-2.5"><span class="text-xs">Negotiation Email</span><span class="text-xs font-mono font-bold text-amber-500">0.10</span></div>
-          <div class="flex justify-between px-4 py-2.5"><span class="text-xs">View Dashboard</span><span class="text-xs font-mono font-bold text-tertiary">Free</span></div>
+      <div class="flex items-center gap-2 mb-3"><span class="w-1 h-3 bg-amber-500 rounded-full"></span><h2 class="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Deposit to Vault</h2></div>
+      <div class="glass border border-outline-variant/10 rounded-2xl p-4 space-y-3">
+        <p class="text-[11px] text-on-surface-variant leading-snug">
+          Send cUSD to the vault contract from <span class="text-primary font-semibold">MiniPay</span> or <span class="text-primary font-semibold">Valora</span>, then tell your bot <code class="font-mono text-primary">/deposit confirmed</code>.
+        </p>
+        <p class="text-[10px] text-on-surface-variant leading-snug">
+          Just <span class="text-on-surface font-semibold">5 cUSD</span> is enough — Aave yield covers all operations. Principal never touched.
+        </p>
+        <div class="flex items-center gap-2 p-3 bg-surface-container-lowest border border-outline-variant/10 rounded-xl">
+          <code id="vault-addr" class="text-[10px] font-mono text-secondary flex-1 truncate">Loading…</code>
+          <button data-action="copyVaultAddr" class="text-on-surface-variant hover:text-primary flex-shrink-0"><span class="material-symbols-outlined text-lg">content_copy</span></button>
         </div>
+        <button data-action="openBot" class="w-full py-2.5 rounded-xl bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-95">
+          <span class="material-symbols-outlined text-sm">send</span>Open Bot
+        </button>
       </div>
     </section>
+
+    <!-- Cost table -->
+    <section>
+      <div class="flex items-center gap-2 mb-3"><span class="w-1 h-3 bg-primary rounded-full"></span><h2 class="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Cost Per Action (from yield)</h2></div>
+      <div class="bg-surface-container-low rounded-xl overflow-hidden border border-outline-variant/5">
+        <div class="flex justify-between px-4 py-2.5 border-b border-outline-variant/5">
+          <span class="text-[10px] uppercase font-bold tracking-tighter text-on-surface-variant">Action</span>
+          <span class="text-[10px] uppercase font-bold tracking-tighter text-on-surface-variant">cUSD (from yield)</span>
+        </div>
+        <div class="divide-y divide-outline-variant/5">
+          <div class="flex justify-between px-4 py-2.5"><span class="text-xs">Daily Digest</span><span class="text-xs font-mono font-bold text-emerald-400">Free</span></div>
+          <div class="flex justify-between px-4 py-2.5"><span class="text-xs">Renewal Alerts</span><span class="text-xs font-mono font-bold text-emerald-400">Free</span></div>
+          <div class="flex justify-between px-4 py-2.5"><span class="text-xs">Gmail Scan</span><span class="text-xs font-mono font-bold text-amber-500">0.002</span></div>
+          <div class="flex justify-between px-4 py-2.5"><span class="text-xs">LLM Audit</span><span class="text-xs font-mono font-bold text-amber-500">0.002</span></div>
+          <div class="flex justify-between px-4 py-2.5"><span class="text-xs">CSV Export</span><span class="text-xs font-mono font-bold text-amber-500">0.001</span></div>
+        </div>
+      </div>
+      <p class="text-[10px] text-on-surface-variant text-center mt-2">5 cUSD via Aave generates enough yield to cover all usage — deposit once, runs forever</p>
+    </section>
+
+    <!-- Usage history -->
     <section class="pb-4">
       <div class="flex items-center gap-2 mb-3"><span class="w-1 h-3 bg-tertiary rounded-full"></span><h2 class="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Usage History</h2></div>
       <div id="tx-history"><p class="text-xs text-on-surface-variant text-center py-3">No transactions yet.</p></div>
-      <p class="text-[10px] text-on-surface-variant text-center mt-3">Running on Celo · Fees &lt; $0.001</p>
+      <p class="text-[10px] text-on-surface-variant text-center mt-3">Principal protected by smart contract · Celo Mainnet</p>
     </section>
   </div>
 </div>
