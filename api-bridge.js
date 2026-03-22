@@ -429,7 +429,89 @@ app.post('/vault/withdraw', async (req, res) => {
 // POST /vault/fund-reserve — fund yield reserve (admin)
 app.post('/vault/fund-reserve', async (req, res) => {
   res.json({ vaultAddress: process.env.VAULT_CONTRACT_ADDRESS,
-             instructions: 'Call fundReserve(amount) on the vault contract with cUSD approved first.' });
+             instructions: 'Deposit cUSD into the vault — it is supplied to Aave automatically.' });
+});
+
+// ── Unified charge endpoint ────────────────────────────────────────────────
+// Tries vault first (yield credits). Falls back to pay-per-run if no vault.
+// Python scripts call this instead of /vault/spend directly.
+//
+// Response when vault covers it:  { ok:true, mode:'vault', txHash, costCUSD }
+// Response when pay-per-run:      { ok:false, mode:'pay_per_run', costCUSD, payTo, instructions }
+
+const OP_COSTS_CUSD = { scan: 0.002, audit: 0.002, negotiate: 0.005, export: 0.001 };
+
+app.post('/charge', async (req, res) => {
+  const { userId, action } = req.body;
+  if (!userId || !action) return res.status(400).json({ error: 'userId and action required' });
+
+  const costCUSD = OP_COSTS_CUSD[action];
+  if (costCUSD === undefined) return res.status(400).json({ error: `Unknown action: ${action}` });
+
+  const { ethers } = require('ethers');
+  const costWei = ethers.parseEther(String(costCUSD)).toString();
+
+  // ── Try vault mode first ──────────────────────────────────────────────────
+  if (vaultContract) {
+    try {
+      const vault = await vaultContract.getVault(userId);
+      if (vault.credits >= BigInt(costWei)) {
+        const tx = await vaultContract.spendCredits(userId, costWei, action);
+        await tx.wait();
+        const updated = await vaultContract.getVault(userId);
+        return res.json({
+          ok: true,
+          mode: 'vault',
+          txHash: tx.hash,
+          action,
+          costCUSD,
+          creditsRemaining: ethers.formatEther(updated.credits)
+        });
+      }
+    } catch (e) {
+      // vault call failed — fall through to pay-per-run
+    }
+  }
+
+  // ── Pay-per-run fallback ──────────────────────────────────────────────────
+  // Record the pending charge locally; bot handles collecting payment from user.
+  const file   = path.join(userDir(userId), 'pay-per-run.json');
+  const ledger = readJSON(file) || { pending: [], completed: [] };
+  const charge = { id: Date.now(), action, costCUSD, payTo: process.env.AGENT_WALLET || '', ts: new Date().toISOString() };
+  ledger.pending = [charge, ...ledger.pending].slice(0, 50);
+  writeJSON(file, ledger);
+
+  res.status(402).json({
+    ok: false,
+    mode: 'pay_per_run',
+    action,
+    costCUSD,
+    payTo: charge.payTo,
+    instructions: `Send ${costCUSD} cUSD to ${charge.payTo} then reply /confirm — or deposit into the vault to never pay again`
+  });
+});
+
+// GET /charge-mode/:userId — tells the bot/frontend which mode the user is in
+app.get('/charge-mode/:userId', async (req, res) => {
+  const { userId } = req.params;
+  if (!vaultContract) return res.json({ mode: 'pay_per_run' });
+
+  try {
+    const { ethers } = require('ethers');
+    const vault = await vaultContract.getVault(userId);
+    const hasPrincipal = vault.principal > 0n;
+    const hasCredits   = vault.credits > 0n;
+    res.json({
+      mode: hasPrincipal ? 'vault' : 'pay_per_run',
+      principal: ethers.formatEther(vault.principal),
+      credits:   ethers.formatEther(vault.credits),
+      selfSustaining: vault.selfSustaining,
+      vaultActive: hasPrincipal,
+      canRunNow:  hasCredits || !hasPrincipal   // pay-per-run users always "can run"
+    });
+  } catch (e) {
+    res.json({ mode: 'pay_per_run', error: e.message });
+  }
 });
 
 // Celo cUSD balance
