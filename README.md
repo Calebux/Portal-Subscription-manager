@@ -110,6 +110,15 @@ uint256 yield = principal * (currentIndex - lastIndex) / lastIndex;
 
 At just 5 cUSD deposited: Aave yield covers ~10 scans + ~10 audits + unlimited digests per month. The agent pays for itself.
 
+**No wallet? No problem.** Users who don't want to deposit can still use SubBot pay-per-run. The agent checks which mode you're in and handles it automatically:
+
+| Mode | How it works |
+|------|-------------|
+| **Vault** | Deposit 5 cUSD once → Aave earns yield → agent spends from yield. Zero prompts, runs forever. |
+| **Pay-per-run** | No deposit needed. Bot sends you the cost before each operation, you confirm and pay. |
+
+Every pay-per-run prompt includes a one-tap option to switch to vault mode — users naturally upgrade when they see the value.
+
 Works natively with **MiniPay** — no wallet extension needed. Multi-currency support (NGN, GBP, EUR → USD) means it works for users most Western fintech tools ignore.
 
 ---
