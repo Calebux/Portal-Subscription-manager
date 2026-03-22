@@ -207,13 +207,20 @@ Celo Blockchain
 
 **SubBotVault** — [`0x48720eeDdCc1Cf3B2C613Dc093869a2332841e62`](https://celoscan.io/address/0x48720eeDdCc1Cf3B2C613Dc093869a2332841e62)
 
-The yield vault. User deposits are immediately supplied to Aave v3 on Celo, earning real market-rate yield from borrowers. The agent calls `spendCredits()` for every operation — if yield is insufficient, the call reverts. Principal is locked in Aave; no code path can spend it. At 5 cUSD deposited, yield covers all agent operations indefinitely.
+The yield vault. User deposits are immediately supplied to Aave v3 on Celo, earning real market-rate yield from borrowers. The agent calls `spendCredits()` for every operation — if yield is insufficient, the call reverts. Principal is locked in Aave; no code path can spend it.
+
+- **Aave v3 Pool (Celo)** — [`0x3E59A31363E2ad014dcbc521c4a0d5757d9f3402`](https://celoscan.io/address/0x3E59A31363E2ad014dcbc521c4a0d5757d9f3402)
+- **cUSD / USDm** — [`0x765DE816845861e75A25fCA122bb6898B8B1282a`](https://celoscan.io/address/0x765DE816845861e75A25fCA122bb6898B8B1282a)
+- **aUSDm (Aave receipt token)** — [`0xBba98352628B0B0c4b40583F593fFCb630935a45`](https://celoscan.io/address/0xBba98352628B0B0c4b40583F593fFCb630935a45)
+- **First deposit tx** — [`0xabfe727070c4b54bb58077dd41f0c7a3836ae5e444dca57141882d8810568086`](https://celoscan.io/tx/0xabfe727070c4b54bb58077dd41f0c7a3836ae5e444dca57141882d8810568086)
+
+The vault currently holds a live Aave position. Check the aUSDm contract above — the vault address holds aUSDm that is already slightly above the deposited amount, with yield accruing every block.
 
 **SubBotLog** — [`0x5bc06976e5b46fd624195EFdD0bFC45a73569003`](https://celoscan.io/address/0x5bc06976e5b46fd624195EFdD0bFC45a73569003)
 
 The decision audit trail. Every LLM recommendation — cancel, negotiate, audit complete — creates a transaction with a privacy-preserving user hash, action type, and estimated savings. Running total of savings identified across all users is publicly readable.
 
-This isn't a demo. Both contracts are deployed, the agent is running, and activity is accumulating on-chain.
+This isn't a demo. Both contracts are deployed, the vault has a live Aave position earning real yield, and decision activity is accumulating on-chain.
 
 ---
 
