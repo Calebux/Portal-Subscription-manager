@@ -473,28 +473,29 @@ app.post('/charge', async (req, res) => {
     }
   }
 
-  // ── Pay-per-run fallback ──────────────────────────────────────────────────
-  // Record the pending charge locally; bot handles collecting payment from user.
-  const file   = path.join(userDir(userId), 'pay-per-run.json');
-  const ledger = readJSON(file) || { pending: [], completed: [] };
-  const charge = { id: Date.now(), action, costCUSD, payTo: process.env.AGENT_WALLET || '', ts: new Date().toISOString() };
-  ledger.pending = [charge, ...ledger.pending].slice(0, 50);
-  writeJSON(file, ledger);
+  // ── Free tier fallback ────────────────────────────────────────────────────
+  // No vault deposit? Operations run free. Usage is tracked so users can see
+  // what the vault would cover. The vault pitch lands after they've seen value.
+  const file   = path.join(userDir(userId), 'free-usage.json');
+  const usage  = readJSON(file) || { total: 0, actions: [] };
+  usage.total  += 1;
+  usage.actions = [{ action, costCUSD, ts: new Date().toISOString() }, ...usage.actions].slice(0, 100);
+  writeJSON(file, usage);
 
-  res.status(402).json({
-    ok: false,
-    mode: 'pay_per_run',
+  res.json({
+    ok: true,
+    mode: 'free',
     action,
     costCUSD,
-    payTo: charge.payTo,
-    instructions: `Send ${costCUSD} cUSD to ${charge.payTo} then reply /confirm — or deposit into the vault to never pay again`
+    totalFreeRuns: usage.total,
+    hint: usage.total >= 5 ? `You've run ${usage.total} operations free. Deposit 5 cUSD into the vault and it runs forever from yield.` : null
   });
 });
 
 // GET /charge-mode/:userId — tells the bot/frontend which mode the user is in
 app.get('/charge-mode/:userId', async (req, res) => {
   const { userId } = req.params;
-  if (!vaultContract) return res.json({ mode: 'pay_per_run' });
+  if (!vaultContract) return res.json({ mode: 'free', canRunNow: true });
 
   try {
     const { ethers } = require('ethers');
@@ -502,12 +503,12 @@ app.get('/charge-mode/:userId', async (req, res) => {
     const hasPrincipal = vault.principal > 0n;
     const hasCredits   = vault.credits > 0n;
     res.json({
-      mode: hasPrincipal ? 'vault' : 'pay_per_run',
+      mode: hasPrincipal ? 'vault' : 'free',
       principal: ethers.formatEther(vault.principal),
       credits:   ethers.formatEther(vault.credits),
       selfSustaining: vault.selfSustaining,
       vaultActive: hasPrincipal,
-      canRunNow:  hasCredits || !hasPrincipal   // pay-per-run users always "can run"
+      canRunNow: true   // always true — free tier has no gate
     });
   } catch (e) {
     res.json({ mode: 'pay_per_run', error: e.message });

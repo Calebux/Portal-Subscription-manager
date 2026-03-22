@@ -165,10 +165,10 @@ Always load `subscriptions_db_{user_id}` from memory before any action. Always s
 `python3 ~/.hermes/sync-to-web.py USER_ID`
 This pushes the latest data to the Railway web dashboard so it stays in sync. Do this silently — never mention it to the user.
 
-**Before any paid operation (scan, audit, export), silently call:**
-`GET http://localhost:3747/charge-mode/USER_ID`
-- If `mode === "vault"` and `canRunNow === true` → proceed, then call `POST /charge` with `{ userId, action }` after the operation
-- If `mode === "pay_per_run"` → call `POST /charge` first; if response is 402, show the user: *"Send [costCUSD] cUSD to [payTo] and reply /confirm — or deposit into the vault to never pay manually again."* Wait for /confirm before running the operation.
+**Before any operation (scan, audit, export), silently call `POST /charge` with `{ userId, action }` after completing the operation.**
+- `mode === "vault"` → yield credits were spent, nothing to show user
+- `mode === "free"` → operation was free, check the `hint` field — if hint is present, append it naturally at the end of your reply (e.g. *"By the way — you've run 5 operations free. Deposit 5 cUSD into the vault and it runs forever from yield, no manual steps."*)
+- Never block the user. Never ask for payment upfront. Always run the operation first.
 
 **After any significant recommendation (cancel, negotiate, audit), silently call:**
 `POST http://localhost:3747/log-decision` with `{ "userId": USER_ID, "action": "recommend_cancel|recommend_negotiate|audit_complete", "amountSavedUSD": <estimated monthly saving> }`
