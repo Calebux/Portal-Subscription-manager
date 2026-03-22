@@ -424,6 +424,7 @@ function copyNegotiationEmail() {
 function refreshCredits() {
   renderTxHistory();
   loadVault();
+  loadDecisions();
 }
 
 async function loadVault() {
@@ -511,6 +512,47 @@ function renderTxHistory() {
       <span class="text-xs font-mono font-bold ${amtColor}">${amt}</span>
     </div>`;
   }).join('');
+}
+
+// ── On-chain decision log ─────────────────────────────────────────────────
+async function loadDecisions() {
+  const el = document.getElementById('decisions-list');
+  if (!el) return;
+  try {
+    const uid = state.telegramUserId || 'local';
+    const r   = await fetch(`${API}/decisions?userId=${uid}`, { signal: AbortSignal.timeout(4000) });
+    if (!r.ok) return;
+    const { decisions = [] } = await r.json();
+    if (!decisions.length) return;
+
+    const ACTION_LABEL = {
+      recommend_cancel:    { label: 'Cancel recommended',  color: 'text-red-400' },
+      recommend_negotiate: { label: 'Negotiate recommended', color: 'text-amber-400' },
+      audit_complete:      { label: 'Audit complete',       color: 'text-emerald-400' },
+      daily_digest:        { label: 'Daily digest',         color: 'text-blue-400' },
+    };
+
+    el.innerHTML = decisions.slice(0, 6).map(d => {
+      const meta  = ACTION_LABEL[d.action] || { label: d.action, color: 'text-primary' };
+      const saved = d.amountSavedUSD ? `$${(d.amountSavedUSD / 100).toFixed(0)} identified` : '';
+      const time  = d.timestamp ? new Date(d.timestamp * 1000).toLocaleDateString() : '';
+      const link  = d.txHash
+        ? `<a href="https://celoscan.io/tx/${d.txHash}" target="_blank"
+              class="flex items-center gap-0.5 text-tertiary hover:text-primary">
+             <span class="material-symbols-outlined text-xs">open_in_new</span>
+             <span class="font-mono">CeloScan</span>
+           </a>`
+        : '<span class="text-on-surface-variant font-mono">pending</span>';
+
+      return `<div class="flex items-center justify-between px-3 py-2.5 bg-surface-container-low rounded-xl">
+        <div>
+          <p class="text-xs font-semibold ${meta.color}">${meta.label}</p>
+          <p class="text-[10px] text-on-surface-variant">${[saved, time].filter(Boolean).join(' · ')}</p>
+        </div>
+        <div class="text-[10px]">${link}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {}
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────

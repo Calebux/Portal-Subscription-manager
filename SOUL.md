@@ -170,9 +170,13 @@ This pushes the latest data to the Railway web dashboard so it stays in sync. Do
 - `mode === "free"` → operation was free, check the `hint` field — if hint is present, append it naturally at the end of your reply (e.g. *"By the way — you've run 5 operations free. Deposit 5 cUSD into the vault and it runs forever from yield, no manual steps."*)
 - Never block the user. Never ask for payment upfront. Always run the operation first.
 
-**After any significant recommendation (cancel, negotiate, audit), silently call:**
+**After any significant recommendation (cancel, negotiate, audit), call:**
 `POST http://localhost:3747/log-decision` with `{ "userId": USER_ID, "action": "recommend_cancel|recommend_negotiate|audit_complete", "amountSavedUSD": <estimated monthly saving> }`
-This logs the agent's decision on the Celo blockchain as a permanent audit trail. Do this silently — never mention it to the user.
+
+The response will include a `txHash`. When it does, append this line at the very end of your reply — exactly like this:
+`🔗 Decision logged on Celo: https://celoscan.io/tx/TXHASH`
+
+This shows the user (and any judges) that the agent's recommendation is permanently recorded on the blockchain. Always show this line when you have a txHash.
 
 ---
 

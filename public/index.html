@@ -346,11 +346,21 @@
       <p class="text-[10px] text-on-surface-variant text-center mt-2">5 cUSD via Aave generates enough yield to cover all usage — deposit once, runs forever</p>
     </section>
 
-    <!-- Usage history -->
+    <!-- On-chain decision log -->
     <section class="pb-4">
-      <div class="flex items-center gap-2 mb-3"><span class="w-1 h-3 bg-tertiary rounded-full"></span><h2 class="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Usage History</h2></div>
-      <div id="tx-history"><p class="text-xs text-on-surface-variant text-center py-3">No transactions yet.</p></div>
-      <p class="text-[10px] text-on-surface-variant text-center mt-3">Principal protected by smart contract · Celo Mainnet</p>
+      <div class="flex items-center gap-2 mb-3">
+        <span class="w-1 h-3 bg-tertiary rounded-full"></span>
+        <h2 class="text-xs font-bold uppercase tracking-widest text-on-surface-variant">On-Chain Decision Log</h2>
+        <span class="ml-auto text-[9px] font-mono text-tertiary">Celo Mainnet</span>
+      </div>
+      <div id="decisions-list" class="space-y-2">
+        <p class="text-xs text-on-surface-variant text-center py-3">No decisions logged yet — run an audit.</p>
+      </div>
+      <a href="https://celoscan.io/address/0x5bc06976e5b46fd624195EFdD0bFC45a73569003" target="_blank"
+         class="flex items-center justify-center gap-1 mt-3 text-[10px] text-tertiary hover:text-primary">
+        <span class="material-symbols-outlined text-sm">open_in_new</span>
+        View all decisions on CeloScan
+      </a>
     </section>
   </div>
 </div>
