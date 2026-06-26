@@ -139,10 +139,10 @@ let web3authInstance = null;
 let web3authInitPromise = null;
 
 async function waitForSDK() {
-  if (window.Modal && window.EthereumProvider && window.DefaultEvmAdapter) return;
+  if (window.Modal) return;
   return new Promise(resolve => {
     const check = setInterval(() => {
-      if (window.Modal && window.EthereumProvider && window.DefaultEvmAdapter) { clearInterval(check); resolve(); }
+      if (window.Modal) { clearInterval(check); resolve(); }
     }, 100);
     setTimeout(() => { clearInterval(check); resolve(); }, 10000);
   });
@@ -155,27 +155,16 @@ async function getWeb3Auth() {
   web3authInitPromise = (async () => {
     await waitForSDK();
     if (!window.Modal) throw new Error('Web3Auth SDK failed to load');
-    if (!window.EthereumProvider) throw new Error('EthereumProvider SDK failed to load');
-    const { Web3Auth } = window.Modal;
-    const { EthereumPrivateKeyProvider } = window.EthereumProvider;
-    const privateKeyProvider = new EthereumPrivateKeyProvider({ config: { chainConfig: CELO_CHAIN } });
+    const { Web3Auth, WEB3AUTH_NETWORK } = window.Modal;
     const instance = new Web3Auth({
       clientId: W3A_CLIENT_ID,
-      chainConfig: CELO_CHAIN,
-      privateKeyProvider,
-      web3AuthNetwork: 'sapphire_mainnet',
+      chains: [CELO_CHAIN],
+      defaultChainId: '0xa4ec',
+      web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_MAINNET,
     });
 
-    // Add external wallet adapters (MetaMask, WalletConnect, etc.)
-    if (window.DefaultEvmAdapter?.getDefaultExternalAdapters) {
-      try {
-        const adapters = await window.DefaultEvmAdapter.getDefaultExternalAdapters({ options: { clientId: W3A_CLIENT_ID, chainConfig: CELO_CHAIN, privateKeyProvider, web3AuthNetwork: 'sapphire_mainnet' } });
-        adapters.forEach(a => { try { instance.configureAdapter(a); } catch (_) {} });
-      } catch (_) {}
-    }
-
     try {
-      await instance.initModal();
+      await instance.init();
     } catch (initErr) {
       console.error('Web3Auth init failed:', initErr);
       web3authInitPromise = null;
@@ -393,6 +382,13 @@ document.addEventListener('click', e => {
     case 'web3authLogout':   web3authLogout(); break;
     case 'copyWallet':       copyWalletAddress(); break;
     case 'claimGD':          claimGD(); break;
+    case 'showSubDetail':    showSubDetail(el.dataset.subId); break;
+    case 'deleteSub':        e.stopPropagation(); deleteSub(el.dataset.subId); break;
+    case 'editSubFromDetail': editSub(detailSubId); break;
+    case 'deleteSubFromDetail': document.getElementById('modal-sub-detail')?.classList.remove('active'); deleteSub(detailSubId); break;
+    case 'toggleTheme':      toggleTheme(); break;
+    case 'pwaInstall':       installPWA(); break;
+    case 'pwaDismiss':       document.getElementById('pwa-install-banner')?.classList.add('hidden'); localStorage.setItem('pwa-dismissed', '1'); break;
   }
 });
 
@@ -533,7 +529,7 @@ function renderSubs() {
     const initBg  = s.category === 'ai' ? 'bg-surface-container-highest text-primary' : 'bg-surface-container-highest text-secondary';
     const cost    = s.monthly_cost_usd || s.monthly_cost || 0;
     const sym     = cSym(s.currency);
-    return `<div class="h-[72px] glass rounded-xl px-3 flex items-center gap-3 border border-outline-variant/10 hover:bg-surface-bright/40 transition-all cursor-pointer">
+    return `<div class="h-[72px] glass rounded-xl px-3 flex items-center gap-3 border border-outline-variant/10 hover:bg-surface-bright/40 transition-all cursor-pointer" data-action="showSubDetail" data-sub-id="${s.id}">
       <div class="w-10 h-10 rounded-lg ${initBg} flex items-center justify-center font-bold text-lg flex-shrink-0">${s.name.charAt(0)}</div>
       <div class="flex-1 min-w-0">
         <div class="flex justify-between items-start">
@@ -546,8 +542,89 @@ function renderSubs() {
           ${s.next_renewal ? `<span class="text-[10px] text-on-surface-variant ml-auto">Renew: ${new Date(s.next_renewal).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>` : ''}
         </div>
       </div>
+      <button data-action="deleteSub" data-sub-id="${s.id}" class="flex-shrink-0 p-1.5 rounded-lg hover:bg-error/10 text-on-surface-variant hover:text-error transition-colors" title="Delete">
+        <span class="material-symbols-outlined text-sm">delete</span>
+      </button>
     </div>`;
   }).join('');
+}
+
+// ── Subscription Detail ──────────────────────────────────────────────────
+let detailSubId = null;
+
+function showSubDetail(id) {
+  const sub = state.subscriptions.find(s => s.id === id);
+  if (!sub) return;
+  detailSubId = id;
+  const content = document.getElementById('sub-detail-content');
+  const cost = sub.monthly_cost_usd || sub.monthly_cost || 0;
+  const sym = cSym(sub.currency);
+  const health = sub.health_score || 0;
+  const hColor = health >= 80 ? 'text-tertiary' : health >= 50 ? 'text-amber-400' : 'text-error';
+  const created = sub.created_at ? new Date(sub.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+  const renewal = sub.next_renewal ? new Date(sub.next_renewal).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+
+  content.innerHTML = `
+    <div class="flex items-center gap-3 mb-2">
+      <div class="w-12 h-12 rounded-xl bg-surface-container-highest flex items-center justify-center font-bold text-xl text-primary">${sub.name.charAt(0)}</div>
+      <div>
+        <h3 class="text-lg font-bold">${sub.name}</h3>
+        <p class="text-xs text-on-surface-variant">${sub.provider || sub.name}</p>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-2">
+      <div class="bg-surface-container-low rounded-lg p-2.5"><p class="text-[10px] text-on-surface-variant uppercase tracking-wider">Cost</p><p class="text-sm font-bold font-mono">${sym}${cost}/mo</p></div>
+      <div class="bg-surface-container-low rounded-lg p-2.5"><p class="text-[10px] text-on-surface-variant uppercase tracking-wider">Category</p><p class="text-sm font-semibold capitalize">${sub.category || 'Other'}</p></div>
+      <div class="bg-surface-container-low rounded-lg p-2.5"><p class="text-[10px] text-on-surface-variant uppercase tracking-wider">Renewal</p><p class="text-sm font-mono">${renewal}</p></div>
+      <div class="bg-surface-container-low rounded-lg p-2.5"><p class="text-[10px] text-on-surface-variant uppercase tracking-wider">Health</p><p class="text-sm font-bold font-mono ${hColor}">♥ ${health}/100</p></div>
+      <div class="bg-surface-container-low rounded-lg p-2.5"><p class="text-[10px] text-on-surface-variant uppercase tracking-wider">Currency</p><p class="text-sm font-mono">${sub.currency || 'USD'}</p></div>
+      <div class="bg-surface-container-low rounded-lg p-2.5"><p class="text-[10px] text-on-surface-variant uppercase tracking-wider">Added</p><p class="text-sm font-mono">${created}</p></div>
+    </div>`;
+  document.getElementById('modal-sub-detail')?.classList.add('active');
+}
+
+// ── Delete Subscription ──────────────────────────────────────────────────
+async function deleteSub(id) {
+  const sub = state.subscriptions.find(s => s.id === id);
+  if (!sub) return;
+  if (!confirm(`Delete "${sub.name}"?`)) return;
+
+  state.subscriptions = state.subscriptions.filter(s => s.id !== id);
+  saveState();
+
+  try {
+    await fetch(`${API}/delete-sub`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subId: id, userId: userId() }),
+      signal: AbortSignal.timeout(4000),
+    });
+  } catch (_) {}
+
+  toast(`${sub.name} deleted`);
+  renderSubs();
+  refreshDashboard();
+}
+
+// ── Edit Subscription ────────────────────────────────────────────────────
+let editingSubId = null;
+
+function editSub(id) {
+  const sub = state.subscriptions.find(s => s.id === id);
+  if (!sub) return;
+  editingSubId = id;
+
+  document.getElementById('add-sub-title').textContent = 'Edit Subscription';
+  document.getElementById('add-sub-save-btn').textContent = 'Save Changes';
+  document.getElementById('add-sub-name').value = sub.name || '';
+  document.getElementById('add-sub-provider').value = sub.provider || '';
+  document.getElementById('add-sub-cost').value = sub.monthly_cost || '';
+  document.getElementById('add-sub-currency').value = sub.currency || 'USD';
+  document.getElementById('add-sub-renewal').value = sub.next_renewal || '';
+  document.getElementById('add-sub-category').value = sub.category || 'saas';
+
+  document.getElementById('modal-sub-detail')?.classList.remove('active');
+  document.getElementById('modal-add-sub')?.classList.add('active');
 }
 
 // ── Audit ─────────────────────────────────────────────────────────────────
@@ -721,11 +798,15 @@ async function saveBudget() {
 
 // ── Manual add ────────────────────────────────────────────────────────────
 function showAddSubModal() {
+  editingSubId = null;
+  document.getElementById('add-sub-title').textContent = 'Add Subscription';
+  document.getElementById('add-sub-save-btn').textContent = 'Add Subscription';
   ['add-sub-name', 'add-sub-provider', 'add-sub-cost', 'add-sub-renewal'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   const cur = document.getElementById('add-sub-currency');
   if (cur) cur.value = 'USD';
+  document.getElementById('add-sub-category').value = 'saas';
   document.getElementById('modal-add-sub')?.classList.add('active');
 }
 
@@ -736,7 +817,7 @@ async function saveManualSub() {
   if (isNaN(cost) || cost < 0) { toast('Enter a valid cost'); return; }
 
   const sub = {
-    id:              'manual-' + Date.now(),
+    id:              editingSubId || ('manual-' + Date.now()),
     name,
     provider:        document.getElementById('add-sub-provider')?.value?.trim() || name,
     category:        document.getElementById('add-sub-category')?.value || 'saas',
@@ -745,25 +826,39 @@ async function saveManualSub() {
     currency:        (document.getElementById('add-sub-currency')?.value?.trim() || 'USD').toUpperCase(),
     next_renewal:    document.getElementById('add-sub-renewal')?.value || null,
     status:          'active',
-    health_score:    70,
+    health_score:    editingSubId ? (state.subscriptions.find(s => s.id === editingSubId)?.health_score || 70) : 70,
     source:          'manual',
   };
 
-  // Save to bridge (persists for all devices with same userId)
-  try {
-    await fetch(`${API}/add-sub`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sub, userId: userId() }),
-      signal: AbortSignal.timeout(4000),
-    });
-  } catch(e) {}
+  if (editingSubId) {
+    // Update existing
+    state.subscriptions = state.subscriptions.map(s => s.id === editingSubId ? { ...s, ...sub } : s);
+    try {
+      await fetch(`${API}/update-sub`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sub, userId: userId() }),
+        signal: AbortSignal.timeout(4000),
+      });
+    } catch (_) {}
+    toast(`${name} updated!`);
+  } else {
+    // Add new
+    try {
+      await fetch(`${API}/add-sub`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sub, userId: userId() }),
+        signal: AbortSignal.timeout(4000),
+      });
+    } catch (_) {}
+    state.subscriptions = [...(state.subscriptions || []), sub];
+    toast(`${name} added!`);
+  }
 
-  // Also update local state immediately
-  state.subscriptions = [...(state.subscriptions || []), sub];
+  editingSubId = null;
   saveState();
   document.getElementById('modal-add-sub')?.classList.remove('active');
-  toast(`${name} added!`);
   renderSubs();
   refreshDashboard();
 }
@@ -810,8 +905,73 @@ function togglePref(btn) {
   dot.classList.toggle('ml-auto', on);
 }
 
+// ── Theme Toggle ─────────────────────────────────────────────────────────
+function toggleTheme() {
+  const html = document.documentElement;
+  const isDark = html.classList.toggle('dark');
+  localStorage.setItem('subbot-theme', isDark ? 'dark' : 'light');
+  // Update body background for non-dark
+  document.body.style.background = isDark ? '#10141a' : '#f5f5f7';
+  document.body.style.color = isDark ? '#dfe2eb' : '#1c1c1e';
+  // Update toggle button state
+  const btn = document.getElementById('theme-toggle');
+  if (btn) {
+    btn.dataset.on = String(isDark);
+    btn.classList.toggle('bg-primary/20', isDark);
+    btn.classList.toggle('bg-surface-container-highest', !isDark);
+    const dot = btn.querySelector('div');
+    dot.classList.toggle('bg-primary', isDark);
+    dot.classList.toggle('bg-outline', !isDark);
+    dot.classList.toggle('ml-auto', isDark);
+  }
+}
+
+function applyTheme() {
+  const saved = localStorage.getItem('subbot-theme');
+  const isDark = saved !== 'light';
+  document.documentElement.classList.toggle('dark', isDark);
+  document.body.style.background = isDark ? '#10141a' : '#f5f5f7';
+  document.body.style.color = isDark ? '#dfe2eb' : '#1c1c1e';
+  const btn = document.getElementById('theme-toggle');
+  if (btn) {
+    btn.dataset.on = String(isDark);
+    btn.classList.toggle('bg-primary/20', isDark);
+    btn.classList.toggle('bg-surface-container-highest', !isDark);
+    const dot = btn.querySelector('div');
+    dot.classList.toggle('bg-primary', isDark);
+    dot.classList.toggle('bg-outline', !isDark);
+    dot.classList.toggle('ml-auto', isDark);
+  }
+}
+
+// ── PWA Install ──────────────────────────────────────────────────────────
+let deferredInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  if (localStorage.getItem('pwa-dismissed') !== '1') {
+    document.getElementById('pwa-install-banner')?.classList.remove('hidden');
+  }
+});
+
+async function installPWA() {
+  if (!deferredInstallPrompt) { toast('Install not available'); return; }
+  deferredInstallPrompt.prompt();
+  const result = await deferredInstallPrompt.userChoice;
+  if (result.outcome === 'accepted') {
+    toast('SubBot installed!');
+    document.getElementById('pwa-install-banner')?.classList.add('hidden');
+  }
+  deferredInstallPrompt = null;
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────
 async function init() {
+  applyTheme();
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
   await loadState();
 
   // Migrate legacy telegramUserId to userId

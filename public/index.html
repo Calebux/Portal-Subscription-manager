@@ -9,6 +9,21 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <style>
+  html:not(.dark) body{background:#f5f5f7;color:#1c1c1e;}
+  html:not(.dark) .glass{background:rgba(255,255,255,0.85);backdrop-filter:blur(12px);}
+  html:not(.dark) .bg-surface{background:#f5f5f7;}
+  html:not(.dark) .bg-surface-container{background:#e8e8ed;}
+  html:not(.dark) .bg-surface-container-low{background:#ededf0;}
+  html:not(.dark) .bg-surface-container-lowest{background:#ffffff;}
+  html:not(.dark) .bg-surface-container-high{background:#e0e0e5;}
+  html:not(.dark) .bg-surface-container-highest{background:#d6d6db;}
+  html:not(.dark) .text-on-surface{color:#1c1c1e;}
+  html:not(.dark) .text-on-surface-variant{color:#6e6e73;}
+  html:not(.dark) #app-header{background:rgba(245,245,247,0.85)!important;border-bottom-color:rgba(0,0,0,0.06)!important;}
+  html:not(.dark) #app-nav{background:rgba(245,245,247,0.9)!important;border-top-color:rgba(0,0,0,0.06)!important;}
+  html:not(.dark) .nav-tab{color:#8e8e93;}
+  html:not(.dark) #toast{background:#ffffff;border-color:#d1d1d6;color:#1c1c1e;}
+  html:not(.dark) .modal-overlay{background:rgba(0,0,0,0.3);}
   body{font-family:'Inter',sans-serif;background:#10141a;color:#dfe2eb;max-width:480px;min-height:100vh;overflow:hidden;margin:0 auto;}
   .screen{display:none;width:100%;min-height:100vh;flex-direction:column;position:relative;}
   .screen.active{display:flex;}
@@ -67,6 +82,17 @@
 </nav>
 
 <div id="toast"></div>
+
+<!-- PWA INSTALL BANNER -->
+<div id="pwa-install-banner" class="hidden fixed top-14 left-4 right-4 z-50 bg-surface-container rounded-2xl border border-primary/20 p-4 shadow-2xl flex items-center gap-3" style="max-width:480px;margin:0 auto;">
+  <div class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0"><span class="material-symbols-outlined text-primary">install_mobile</span></div>
+  <div class="flex-1 min-w-0">
+    <p class="text-sm font-semibold">Install SubBot</p>
+    <p class="text-[10px] text-on-surface-variant">Add to home screen for the best experience</p>
+  </div>
+  <button data-action="pwaInstall" class="px-3 py-1.5 rounded-lg bg-primary text-on-primary text-xs font-bold active:scale-95">Install</button>
+  <button data-action="pwaDismiss" class="text-on-surface-variant p-1"><span class="material-symbols-outlined text-sm">close</span></button>
+</div>
 
 <!-- SCREEN: WELCOME -->
 <div id="screen-welcome" class="screen active bg-surface">
@@ -317,6 +343,18 @@
       </div>
     </section>
     <section class="space-y-2">
+      <h3 class="text-on-surface-variant font-medium text-xs uppercase tracking-widest pl-1">Appearance</h3>
+      <div class="bg-surface-container rounded-xl p-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <span class="material-symbols-outlined text-primary">dark_mode</span>
+          <span class="text-sm font-medium">Dark Mode</span>
+        </div>
+        <button data-action="toggleTheme" class="pref-toggle w-11 h-6 bg-primary/20 rounded-full relative p-0.5 flex items-center" data-on="true" id="theme-toggle">
+          <div class="w-5 h-5 bg-primary rounded-full shadow-sm ml-auto"></div>
+        </button>
+      </div>
+    </section>
+    <section class="space-y-2">
       <h3 class="text-on-surface-variant font-medium text-xs uppercase tracking-widest pl-1">Monthly Budget</h3>
       <div class="bg-surface-container-low rounded-xl p-5 border border-outline-variant/10 text-center">
         <div class="inline-flex items-baseline gap-1"><span class="text-primary text-2xl font-bold">$</span><input id="budget-input" type="number" class="bg-transparent border-none p-0 focus:ring-0 text-4xl font-bold w-24 text-on-surface tracking-tighter font-mono" value="100"/></div>
@@ -349,11 +387,30 @@
   </div>
 </div>
 
-<!-- MODAL: ADD SUBSCRIPTION -->
+<!-- MODAL: SUBSCRIPTION DETAIL -->
+<div id="modal-sub-detail" class="modal-overlay items-center" data-modal="modal-sub-detail">
+  <div class="glass w-full max-w-[360px] rounded-2xl border border-outline-variant/20 shadow-2xl p-5" data-modal-content>
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="font-semibold">Subscription Details</h2>
+      <button data-action="closeModal" data-modal="modal-sub-detail"><span class="material-symbols-outlined text-on-surface-variant">close</span></button>
+    </div>
+    <div id="sub-detail-content" class="space-y-3 mb-4"></div>
+    <div class="flex gap-2">
+      <button id="detail-edit-btn" data-action="editSubFromDetail" class="flex-1 py-3 rounded-xl border border-primary text-primary font-bold text-sm flex items-center justify-center gap-1.5 active:scale-95">
+        <span class="material-symbols-outlined text-sm">edit</span> Edit
+      </button>
+      <button id="detail-delete-btn" data-action="deleteSubFromDetail" class="flex-1 py-3 rounded-xl border border-error text-error font-bold text-sm flex items-center justify-center gap-1.5 active:scale-95">
+        <span class="material-symbols-outlined text-sm">delete</span> Delete
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ADD / EDIT SUBSCRIPTION -->
 <div id="modal-add-sub" class="modal-overlay items-center" data-modal="modal-add-sub">
   <div class="glass w-full max-w-[360px] rounded-2xl border border-outline-variant/20 shadow-2xl p-5" data-modal-content>
     <div class="flex justify-between items-center mb-4">
-      <h2 class="font-semibold">Add Subscription</h2>
+      <h2 id="add-sub-title" class="font-semibold">Add Subscription</h2>
       <button data-action="closeModal" data-modal="modal-add-sub"><span class="material-symbols-outlined text-on-surface-variant">close</span></button>
     </div>
     <div class="space-y-3 mb-4">
@@ -386,13 +443,11 @@
         </select>
       </div>
     </div>
-    <button data-action="saveManualSub" class="w-full py-3 rounded-xl signature-glow text-slate-900 font-bold text-sm active:scale-95">Add Subscription</button>
+    <button id="add-sub-save-btn" data-action="saveManualSub" class="w-full py-3 rounded-xl signature-glow text-slate-900 font-bold text-sm active:scale-95">Add Subscription</button>
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@web3auth/ethereum-provider@9.5.3/dist/ethereumProvider.umd.min.js" async></script>
-<script src="https://cdn.jsdelivr.net/npm/@web3auth/default-evm-adapter@9.5.3/dist/defaultEvmAdapter.umd.min.js" async></script>
-<script src="https://cdn.jsdelivr.net/npm/@web3auth/modal@9.5.3/dist/modal.umd.min.js" async></script>
+<script src="https://cdn.jsdelivr.net/npm/@web3auth/modal@10.16.0/dist/modal.umd.min.js" async></script>
 <script src="popup.js" defer></script>
 </body>
 </html>

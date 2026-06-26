@@ -267,6 +267,28 @@ app.post('/add-sub', (req, res) => {
   res.json({ ok: true, count: data.subscriptions.length });
 });
 
+// Delete a subscription
+app.post('/delete-sub', (req, res) => {
+  const { subId, userId = 'local' } = req.body;
+  if (!subId) return res.status(400).json({ error: 'subId required' });
+  const file = path.join(userDir(userId), 'scanned-subscriptions.json');
+  const data = readJSON(file) || { subscriptions: [], cancellation_history: [], monthly_budget: null };
+  data.subscriptions = data.subscriptions.filter(s => s.id !== subId);
+  writeJSON(file, data);
+  res.json({ ok: true, count: data.subscriptions.length });
+});
+
+// Update a subscription
+app.post('/update-sub', (req, res) => {
+  const { sub, userId = 'local' } = req.body;
+  if (!sub || !sub.id) return res.status(400).json({ error: 'sub.id required' });
+  const file = path.join(userDir(userId), 'scanned-subscriptions.json');
+  const data = readJSON(file) || { subscriptions: [], cancellation_history: [], monthly_budget: null };
+  data.subscriptions = data.subscriptions.map(s => s.id === sub.id ? { ...s, ...sub } : s);
+  writeJSON(file, data);
+  res.json({ ok: true, count: data.subscriptions.length });
+});
+
 // Scan Gmail inbox
 app.post('/scan', async (req, res) => {
   const { email, password, userId = 'local' } = req.body;
