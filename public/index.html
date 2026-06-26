@@ -9,10 +9,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <style>
-  body{font-family:'Inter',sans-serif;background:#10141a;color:#dfe2eb;width:400px;min-height:580px;max-height:580px;overflow:hidden;margin:0;}
-  .screen{display:none;width:400px;min-height:580px;flex-direction:column;position:relative;}
+  body{font-family:'Inter',sans-serif;background:#10141a;color:#dfe2eb;max-width:480px;min-height:100vh;overflow:hidden;margin:0 auto;}
+  .screen{display:none;width:100%;min-height:100vh;flex-direction:column;position:relative;}
   .screen.active{display:flex;}
-  .screen-scroll{overflow-y:auto;flex:1;max-height:calc(580px - 52px - 56px);}
+  .screen-scroll{overflow-y:auto;flex:1;max-height:calc(100vh - 52px - 56px);}
   .screen-scroll::-webkit-scrollbar{width:4px;}
   .screen-scroll::-webkit-scrollbar-thumb{background:#31353c;border-radius:10px;}
   .material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;}
@@ -72,7 +72,7 @@
 <div id="screen-welcome" class="screen active bg-surface">
   <div class="absolute -top-24 -right-24 w-64 h-64 bg-primary/10 rounded-full blur-[80px]"></div>
   <div class="absolute -bottom-24 -left-24 w-64 h-64 bg-secondary/5 rounded-full blur-[80px]"></div>
-  <div class="flex-1 flex flex-col items-center justify-between px-8 py-6 z-10 overflow-y-auto" style="max-height:580px;">
+  <div class="flex-1 flex flex-col items-center justify-between px-8 py-6 z-10 overflow-y-auto" style="max-height:calc(100vh - 56px);">
     <div class="w-full flex flex-col items-center text-center mt-4">
       <div class="mb-6">
         <div class="w-20 h-20 bg-surface-container rounded-3xl flex items-center justify-center logo-glow border border-primary/20">
@@ -235,14 +235,16 @@
       <p class="text-[10px] text-on-surface-variant mt-2">Managed by SubBot · syncs automatically</p>
     </div>
 
-    <!-- Top up via GoodDollar -->
+    <!-- Claim G$ -->
     <section>
-      <div class="flex items-center gap-2 mb-3"><span class="w-1 h-3 bg-amber-500 rounded-full"></span><h2 class="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Top Up</h2></div>
-      <div class="glass border border-outline-variant/10 rounded-2xl p-4 space-y-3">
-        <p class="text-[11px] text-on-surface-variant leading-snug">Claim your daily G$ from <a href="https://wallet.gooddollar.org" target="_blank" class="text-primary font-semibold hover:underline">GoodDollar</a>, then use it here. Your Web3Auth wallet is already connected.</p>
-        <button data-action="refreshData" class="w-full py-2.5 rounded-xl bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-95">
-          <span class="material-symbols-outlined text-sm">sync</span>Refresh Balance
-        </button>
+      <div class="flex items-center gap-2 mb-3"><span class="w-1 h-3 bg-amber-500 rounded-full"></span><h2 class="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Claim G$</h2></div>
+      <div class="glass border border-outline-variant/10 rounded-2xl overflow-hidden">
+        <iframe id="gd-claim-frame" src="https://wallet.gooddollar.org/claim" style="width:100%;height:320px;border:none;border-radius:16px;" allow="camera;microphone" loading="lazy"></iframe>
+        <div class="p-3">
+          <button data-action="refreshData" class="w-full py-2.5 rounded-xl bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-95">
+            <span class="material-symbols-outlined text-sm">sync</span>Refresh Balance
+          </button>
+        </div>
       </div>
     </section>
 
@@ -351,7 +353,19 @@
       <div><label class="text-[10px] uppercase tracking-widest text-on-surface-variant">Provider</label><input id="add-sub-provider" placeholder="e.g. Netflix Inc." class="w-full bg-surface-container-low border border-outline-variant/20 rounded-lg py-2 px-3 text-xs mt-1 focus:outline-none"/></div>
       <div class="flex gap-2">
         <div class="flex-1"><label class="text-[10px] uppercase tracking-widest text-on-surface-variant">Monthly Cost *</label><input id="add-sub-cost" type="number" min="0" step="0.01" placeholder="9.99" class="w-full bg-surface-container-low border border-outline-variant/20 rounded-lg py-2 px-3 text-xs mt-1 focus:outline-none"/></div>
-        <div class="w-20"><label class="text-[10px] uppercase tracking-widest text-on-surface-variant">Currency</label><input id="add-sub-currency" placeholder="USD" maxlength="3" class="w-full bg-surface-container-low border border-outline-variant/20 rounded-lg py-2 px-3 text-xs mt-1 focus:outline-none"/></div>
+        <div class="w-24"><label class="text-[10px] uppercase tracking-widest text-on-surface-variant">Currency</label>
+          <select id="add-sub-currency" class="w-full bg-surface-container-low border border-outline-variant/20 rounded-lg py-2 px-3 text-xs mt-1 focus:outline-none">
+            <option value="USD">USD</option>
+            <option value="EUR">EUR</option>
+            <option value="GBP">GBP</option>
+            <option value="NGN">NGN</option>
+            <option value="KES">KES</option>
+            <option value="GHS">GHS</option>
+            <option value="ZAR">ZAR</option>
+            <option value="G$">G$</option>
+            <option value="cUSD">cUSD</option>
+          </select>
+        </div>
       </div>
       <div><label class="text-[10px] uppercase tracking-widest text-on-surface-variant">Next Renewal</label><input id="add-sub-renewal" type="date" class="w-full bg-surface-container-low border border-outline-variant/20 rounded-lg py-2 px-3 text-xs mt-1 focus:outline-none"/></div>
       <div><label class="text-[10px] uppercase tracking-widest text-on-surface-variant">Category</label>
