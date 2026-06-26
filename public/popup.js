@@ -17,11 +17,21 @@ const CELO_CHAIN = {
 let web3authInstance = null;
 let web3authInitPromise = null;
 
+async function waitForSDK() {
+  if (window.Modal) return;
+  return new Promise(resolve => {
+    const check = setInterval(() => { if (window.Modal) { clearInterval(check); resolve(); } }, 100);
+    setTimeout(() => { clearInterval(check); resolve(); }, 10000);
+  });
+}
+
 async function getWeb3Auth() {
   if (web3authInstance) return web3authInstance;
   if (web3authInitPromise) return web3authInitPromise;
 
   web3authInitPromise = (async () => {
+    await waitForSDK();
+    if (!window.Modal) throw new Error('Web3Auth SDK failed to load');
     const { Web3Auth, WEB3AUTH_NETWORK } = window.Modal;
     const instance = new Web3Auth({
       clientId: W3A_CLIENT_ID,
