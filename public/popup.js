@@ -5,80 +5,65 @@ const API            = 'https://subbotai.xyz';
 const PROJECT_WALLET = '0xA6F46Dcaa07C6b56D02379Ec3b2AafDFe3BA0DfA';
 
 // ── Web3Auth ──────────────────────────────────────────────────────────────────
-const IS_EXTENSION = !!(
-  typeof chrome !== 'undefined' && chrome.runtime && typeof chrome.runtime.getURL === 'function'
-);
-const WEB3AUTH_LOGIN_PAGE = IS_EXTENSION
-  ? chrome.runtime.getURL('web3auth-login.html')
-  : '/web3auth-login.html';
+const W3A_CLIENT_ID = 'BCkzpmFTjh9pTHe7LGNlrg_jo22W7DNHGkkZSbgrQlOeSf7AzRZ1qdZXDRyxplEq5knOTiCjhH-uga6tpnASP1o';
+const W3A_CHAIN_CONFIG = {
+  chainNamespace: 'eip155',
+  chainId: '0xa4ec',
+  rpcTarget: 'https://forno.celo.org',
+  displayName: 'Celo Mainnet',
+  blockExplorerUrl: 'https://celoscan.io',
+  ticker: 'CELO',
+  tickerName: 'CELO',
+};
 
-// Unified storage helpers — chrome.storage in extension, localStorage on web
+let web3authInstance = null;
+
+async function getWeb3Auth() {
+  if (web3authInstance) return web3authInstance;
+  const { Web3Auth } = window.Modal;
+  web3authInstance = new Web3Auth({
+    clientId: W3A_CLIENT_ID,
+    chainConfig: W3A_CHAIN_CONFIG,
+    web3AuthNetwork: 'sapphire_mainnet',
+  });
+  await web3authInstance.initModal();
+  return web3authInstance;
+}
+
+// Storage helpers
 function w3aGet(cb) {
-  if (IS_EXTENSION) {
-    chrome.storage.local.get('web3auth', d => cb(d.web3auth || null));
-  } else {
-    try { cb(JSON.parse(localStorage.getItem('web3auth'))); } catch { cb(null); }
-  }
+  try { cb(JSON.parse(localStorage.getItem('web3auth'))); } catch { cb(null); }
 }
 function w3aSet(data, cb) {
-  if (IS_EXTENSION) {
-    chrome.storage.local.set({ web3auth: data }, cb);
-  } else {
-    localStorage.setItem('web3auth', JSON.stringify(data));
-    if (cb) cb();
-  }
+  localStorage.setItem('web3auth', JSON.stringify(data));
+  if (cb) cb();
 }
 function w3aRemove(cb) {
-  if (IS_EXTENSION) {
-    chrome.storage.local.remove('web3auth', cb);
-  } else {
-    localStorage.removeItem('web3auth');
-    if (cb) cb();
-  }
+  localStorage.removeItem('web3auth');
+  if (cb) cb();
 }
 
-function openWeb3AuthTab() {
-  if (IS_EXTENSION) {
-    chrome.tabs.create({ url: WEB3AUTH_LOGIN_PAGE, active: true });
-  } else {
-    window.open(WEB3AUTH_LOGIN_PAGE, 'web3auth_login', 'width=480,height=640,left=200,top=100');
-  }
-
-  // Listen for the result via BroadcastChannel (web) or storage polling (extension)
-  if (!IS_EXTENSION) {
-    const handleW3AResult = async w3a => {
-      if (!w3a?.idToken) return;
-      w3aSet(w3a, async () => {
-        renderW3AStatus(w3a);
-        await syncWeb3AuthUser(w3a);
-      });
+async function openWeb3AuthModal() {
+  try {
+    const w3a = await getWeb3Auth();
+    if (w3a.connected) await w3a.logout();
+    await w3a.connect();
+    const info = await w3a.getUserInfo();
+    const payload = {
+      idToken:      info.idToken,
+      email:        info.email        || '',
+      name:         info.name         || '',
+      profileImage: info.profileImage || '',
+      verifier:     info.verifier     || 'web3auth',
+      verifierId:   info.verifierId   || info.email || '',
+      loginAt:      Date.now(),
     };
-
-    // Primary: BroadcastChannel
-    const bc = new BroadcastChannel('web3auth_result');
-    bc.onmessage = e => { bc.close(); handleW3AResult(e.data); };
-    setTimeout(() => bc.close(), 180000);
-
-    // Fallback: postMessage from popup window
-    const onMsg = e => {
-      if (e.data?.type === 'web3auth_result') {
-        window.removeEventListener('message', onMsg);
-        handleW3AResult(e.data.data);
-      }
-    };
-    window.addEventListener('message', onMsg);
-  } else {
-    // Extension: popup stays open; poll chrome.storage for the result
-    const checkInterval = setInterval(() => {
-      w3aGet(w3a => {
-        if (w3a?.idToken && w3a?.loginAt && (Date.now() - w3a.loginAt) < 30000) {
-          clearInterval(checkInterval);
-          renderW3AStatus(w3a);
-          syncWeb3AuthUser(w3a);
-        }
-      });
-    }, 800);
-    setTimeout(() => clearInterval(checkInterval), 180000);
+    w3aSet(payload, async () => {
+      renderW3AStatus(payload);
+      await syncWeb3AuthUser(payload);
+    });
+  } catch (err) {
+    if (!err.message?.includes('user closed')) toast('Login failed — try again');
   }
 }
 
@@ -152,6 +137,7 @@ async function syncWeb3AuthUser(w3a) {
 }
 
 async function web3authLogout() {
+  try { if (web3authInstance?.connected) await web3authInstance.logout(); } catch (_) {}
   w3aRemove(() => {
     renderW3AStatus(null);
     state.userId = null;
@@ -159,7 +145,7 @@ async function web3authLogout() {
     state.balance        = 0;
     state.txHistory      = [];
     saveState();
-    toast('Signed out of Web3Auth');
+    toast('Signed out');
     showScreen('welcome');
   });
 }
@@ -265,7 +251,7 @@ document.addEventListener('click', e => {
     case 'copyNeg':          copyNegotiationEmail(); break;
     case 'draftEmail':       draftEmail(el.dataset.service); break;
     case 'togglePref':       togglePref(el); break;
-    case 'web3authLogin':    openWeb3AuthTab(); break;
+    case 'web3authLogin':    openWeb3AuthModal(); break;
     case 'web3authLogout':   web3authLogout(); break;
     case 'web3authDashboard': showScreen('dashboard'); break;
   }
