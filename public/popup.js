@@ -17,6 +17,124 @@ const CELO_CHAIN = {
 const CURRENCY_SYMBOLS = { USD:'$', EUR:'€', GBP:'£', NGN:'₦', KES:'KSh', GHS:'GH₵', ZAR:'R', 'G$':'G$', cUSD:'cUSD' };
 function cSym(code) { return CURRENCY_SYMBOLS[code] || code || '$'; }
 
+// ── GoodDollar contracts (Celo mainnet) ──────────────────────────────────
+const GD_IDENTITY = '0xC361A6E67822a0EDc17D899227dd9FC50BD62F42';
+const GD_UBISCHEME = '0x43d72Ff17701B2DA814620735C39C620Ce0ea4A1';
+const GD_TOKEN = '0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A';
+// ABI encodings (4-byte selectors)
+const SEL_IS_WHITELISTED = '0x3af32abf'; // isWhitelisted(address)
+const SEL_CHECK_ENTITLEMENT = '0x0a4d564c'; // checkEntitlement(address)
+const SEL_CLAIM = '0x4e71d92d'; // claim()
+const SEL_BALANCE_OF = '0x70a08231'; // balanceOf(address)
+
+function padAddr(addr) { return '000000000000000000000000' + addr.slice(2).toLowerCase(); }
+
+async function ethCall(to, data) {
+  const r = await fetch('https://forno.celo.org', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to, data }, 'latest'] }),
+  });
+  const j = await r.json();
+  return j.result;
+}
+
+async function checkGDStatus(address) {
+  const statusEl = document.getElementById('gd-status');
+  const claimBtn = document.getElementById('gd-claim-btn');
+  const claimableEl = document.getElementById('gd-claimable');
+  const verifyLink = document.getElementById('gd-verify-link');
+  if (!statusEl || !address) return;
+
+  claimBtn?.classList.add('hidden');
+  verifyLink?.classList.add('hidden');
+
+  try {
+    // Check whitelisted
+    const wlResult = await ethCall(GD_IDENTITY, SEL_IS_WHITELISTED + padAddr(address));
+    const isWhitelisted = wlResult && BigInt(wlResult) === 1n;
+
+    if (!isWhitelisted) {
+      statusEl.textContent = 'Not verified. Get your GoodDollar identity to claim daily G$.';
+      verifyLink?.classList.remove('hidden');
+      verifyLink?.classList.add('inline-flex');
+      return;
+    }
+
+    // Check entitlement
+    const entResult = await ethCall(GD_UBISCHEME, SEL_CHECK_ENTITLEMENT + padAddr(address));
+    const entitlement = entResult ? BigInt(entResult) : 0n;
+
+    if (entitlement > 0n) {
+      const amount = (Number(entitlement) / 1e18).toFixed(2);
+      claimableEl.textContent = amount + ' G$';
+      statusEl.textContent = 'You have G$ to claim!';
+      claimBtn?.classList.remove('hidden');
+    } else {
+      claimableEl.textContent = '';
+      statusEl.textContent = 'Already claimed today. Come back tomorrow!';
+    }
+  } catch (err) {
+    console.error('GD check error:', err);
+    statusEl.textContent = 'Could not check eligibility.';
+  }
+}
+
+async function claimGD() {
+  const btn = document.getElementById('gd-claim-btn');
+  const statusEl = document.getElementById('gd-status');
+  if (!web3authInstance?.provider) { toast('Connect wallet first'); return; }
+
+  btn.textContent = 'Claiming…';
+  btn.disabled = true;
+
+  try {
+    const accounts = await web3authInstance.provider.request({ method: 'eth_accounts' });
+    const from = accounts?.[0];
+    if (!from) throw new Error('No account');
+
+    const txHash = await web3authInstance.provider.request({
+      method: 'eth_sendTransaction',
+      params: [{ from, to: GD_UBISCHEME, data: SEL_CLAIM, gas: '0x30D40' }], // 200k gas
+    });
+
+    statusEl.textContent = 'Confirming…';
+
+    // Poll for receipt
+    let receipt = null;
+    for (let i = 0; i < 30; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      const resp = await fetch('https://forno.celo.org', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getTransactionReceipt', params: [txHash] }),
+      });
+      const j = await resp.json();
+      if (j.result) { receipt = j.result; break; }
+    }
+
+    if (receipt?.status === '0x1') {
+      statusEl.innerHTML = '<span style="color:#00C58E;font-weight:700">✓ Claimed! G$ incoming.</span>';
+      btn.classList.add('hidden');
+      document.getElementById('gd-claimable').textContent = '';
+      toast('G$ claimed successfully!');
+      // Refresh after a moment
+      setTimeout(() => checkGDStatus(accounts[0]), 3000);
+    } else {
+      statusEl.textContent = 'Transaction failed.';
+      btn.textContent = 'Retry Claim';
+      btn.disabled = false;
+    }
+  } catch (err) {
+    console.error('GD claim error:', err);
+    if (err.message?.includes('user') || err.message?.includes('User')) {
+      statusEl.textContent = 'Claim cancelled.';
+    } else {
+      statusEl.textContent = 'Claim failed: ' + (err.message || 'unknown error');
+    }
+    btn.textContent = 'Retry Claim';
+    btn.disabled = false;
+  }
+}
+
 let web3authInstance = null;
 let web3authInitPromise = null;
 
@@ -116,6 +234,7 @@ async function openWeb3AuthModal() {
     const gotData = await fetchUserData(false);
     toast(gotData ? `Welcome back!` : `Connected: ${address ? address.slice(0,6) + '…' + address.slice(-4) : payload.name || 'user'}`);
     showScreen('dashboard');
+    if (address) checkGDStatus(address).catch(() => {});
   } catch (err) {
     console.error('Web3Auth error:', err);
     if (!err.message?.includes('user closed') && !err.message?.includes('User closed')) {
@@ -271,6 +390,7 @@ document.addEventListener('click', e => {
     case 'web3authLogin':    openWeb3AuthModal(); break;
     case 'web3authLogout':   web3authLogout(); break;
     case 'copyWallet':       copyWalletAddress(); break;
+    case 'claimGD':          claimGD(); break;
   }
 });
 
@@ -323,9 +443,13 @@ function refreshDashboard() {
   const monthly = subs.reduce((sum, s) => sum + (s.monthly_cost_usd || s.monthly_cost || 0), 0);
   const budget  = state.budget || 100;
   const pct     = Math.min(100, Math.round(monthly / budget * 100));
+  // Detect dominant currency
+  const currencies = subs.map(s => s.currency || 'USD');
+  const mainCur = currencies.sort((a,b) => currencies.filter(v=>v===b).length - currencies.filter(v=>v===a).length)[0] || 'USD';
+  const sym = cSym(mainCur);
 
-  document.getElementById('dash-spend').textContent  = '$' + monthly.toFixed(0);
-  document.getElementById('dash-budget').textContent = '/ $' + budget;
+  document.getElementById('dash-spend').textContent  = sym + monthly.toFixed(0);
+  document.getElementById('dash-budget').textContent = '/ ' + sym + budget;
   document.getElementById('dash-pct').textContent    = pct + '%';
   const ring = document.getElementById('budget-ring');
   if (ring) {
@@ -334,7 +458,7 @@ function refreshDashboard() {
   }
 
   document.getElementById('stat-count').textContent    = subs.length;
-  document.getElementById('stat-annual').textContent   = '$' + (monthly * 12).toFixed(0);
+  document.getElementById('stat-annual').textContent   = sym + (monthly * 12).toFixed(0);
 
   const now  = new Date();
   const soon = subs.filter(s => s.next_renewal && (new Date(s.next_renewal) - now) / 86400000 <= 30).length;
@@ -428,8 +552,11 @@ function renderSubs() {
 function runAudit() {
   const subs    = state.subscriptions.filter(s => s.status === 'active');
   const monthly = subs.reduce((sum, s) => sum + (s.monthly_cost_usd || s.monthly_cost || 0), 0);
-  document.getElementById('audit-monthly').textContent = '$' + monthly.toFixed(2);
-  document.getElementById('audit-annual').textContent  = '$' + (monthly * 12).toFixed(2);
+  const currencies = subs.map(s => s.currency || 'USD');
+  const mainCur = currencies.sort((a,b) => currencies.filter(v=>v===b).length - currencies.filter(v=>v===a).length)[0] || 'USD';
+  const sym = cSym(mainCur);
+  document.getElementById('audit-monthly').textContent = sym + monthly.toFixed(2);
+  document.getElementById('audit-annual').textContent  = sym + (monthly * 12).toFixed(2);
 
   const cats = {};
   subs.forEach(s => { const c = s.category || 'other'; cats[c] = (cats[c] || []).concat(s.name); });
@@ -703,6 +830,7 @@ async function init() {
     renderW3AStatus(w3a);
     fetchUserData().catch(() => {});
     showScreen('dashboard');
+    if (w3a.walletAddress) checkGDStatus(w3a.walletAddress).catch(() => {});
   } else {
     // Not connected — show welcome, then open Web3Auth modal once SDK is ready
     w3aRemove();

@@ -243,13 +243,16 @@
     <!-- Claim G$ -->
     <section>
       <div class="flex items-center gap-2 mb-3"><span class="w-1 h-3 bg-amber-500 rounded-full"></span><h2 class="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Claim G$</h2></div>
-      <div class="glass border border-outline-variant/10 rounded-2xl overflow-hidden">
-        <iframe id="gd-claim-frame" src="https://wallet.gooddollar.org/claim" style="width:100%;height:320px;border:none;border-radius:16px;" allow="camera;microphone" loading="lazy"></iframe>
-        <div class="p-3">
-          <button data-action="refreshData" class="w-full py-2.5 rounded-xl bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-95">
-            <span class="material-symbols-outlined text-sm">sync</span>Refresh Balance
-          </button>
+      <div class="rounded-2xl p-4 space-y-3" style="background:rgba(0,197,142,0.06);border:1px solid rgba(0,197,142,0.2);">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-1.5"><span class="text-sm">🌱</span><span class="text-[9px] font-bold uppercase tracking-widest" style="color:#00C58E">GoodDollar UBI</span></div>
+          <span id="gd-claimable" class="text-sm font-black" style="color:#00C58E"></span>
         </div>
+        <div id="gd-status" class="text-[10px] text-on-surface-variant">Checking eligibility…</div>
+        <button id="gd-claim-btn" data-action="claimGD" class="hidden w-full py-2 rounded-lg text-xs font-extrabold uppercase tracking-wider active:scale-95" style="background:#00C58E;color:#000;border:1px solid #00C58E;">
+          Claim G$
+        </button>
+        <a id="gd-verify-link" href="https://wallet.gooddollar.org/verify" target="_blank" rel="noopener" class="hidden text-[10px] font-bold items-center gap-1" style="color:#00C58E">Get Verified →</a>
       </div>
     </section>
 
