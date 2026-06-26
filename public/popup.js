@@ -4,28 +4,37 @@ const API            = 'https://subbotai.xyz';
 
 // ── Web3Auth ──────────────────────────────────────────────────────────────────
 const W3A_CLIENT_ID = 'BCkzpmFTjh9pTHe7LGNlrg_jo22W7DNHGkkZSbgrQlOeSf7AzRZ1qdZXDRyxplEq5knOTiCjhH-uga6tpnASP1o';
-const W3A_CHAIN_CONFIG = {
+const CELO_CHAIN = {
   chainNamespace: 'eip155',
-  chainId: '0xa4ec',
+  chainId: '0xa4ec',        // Celo mainnet = 42220
   rpcTarget: 'https://forno.celo.org',
-  displayName: 'Celo Mainnet',
+  displayName: 'Celo',
   blockExplorerUrl: 'https://celoscan.io',
   ticker: 'CELO',
   tickerName: 'CELO',
 };
 
 let web3authInstance = null;
+let web3authInitPromise = null;
 
 async function getWeb3Auth() {
   if (web3authInstance) return web3authInstance;
-  const W3A = window.Modal?.Web3Auth || window.Modal;
-  web3authInstance = new W3A({
-    clientId: W3A_CLIENT_ID,
-    chainConfig: W3A_CHAIN_CONFIG,
-    web3AuthNetwork: 'sapphire_mainnet',
-  });
-  await web3authInstance.initModal();
-  return web3authInstance;
+  if (web3authInitPromise) return web3authInitPromise;
+
+  web3authInitPromise = (async () => {
+    const { Web3Auth, WEB3AUTH_NETWORK } = window.Modal;
+    const instance = new Web3Auth({
+      clientId: W3A_CLIENT_ID,
+      web3AuthNetwork: WEB3AUTH_NETWORK?.SAPPHIRE_MAINNET || 'sapphire_mainnet',
+      chains: [CELO_CHAIN],
+      defaultChainId: '0xa4ec',
+    });
+    await instance.init();
+    web3authInstance = instance;
+    return instance;
+  })();
+
+  return web3authInitPromise;
 }
 
 // Storage helpers
@@ -45,8 +54,13 @@ async function openWeb3AuthModal() {
   try {
     const w3a = await getWeb3Auth();
     if (w3a.connected) await w3a.logout();
-    await w3a.connect();
-    const info = await w3a.getUserInfo();
+    const provider = await w3a.connect();
+    if (!provider) { toast('Login cancelled'); return; }
+
+    const info    = await w3a.getUserInfo();
+    const accounts = await provider.request({ method: 'eth_accounts' });
+    const address  = accounts?.[0] || '';
+
     const payload = {
       idToken:      info.idToken,
       email:        info.email        || '',
@@ -54,6 +68,7 @@ async function openWeb3AuthModal() {
       profileImage: info.profileImage || '',
       verifier:     info.verifier     || 'web3auth',
       verifierId:   info.verifierId   || info.email || '',
+      walletAddress: address,
       loginAt:      Date.now(),
     };
     w3aSet(payload, async () => {
@@ -135,7 +150,7 @@ async function syncWeb3AuthUser(w3a) {
 }
 
 async function web3authLogout() {
-  try { if (web3authInstance?.connected) await web3authInstance.logout(); } catch (_) {}
+  try { if (web3authInstance?.connected) await web3authInstance.logout(); web3authInstance = null; web3authInitPromise = null; } catch (_) {}
   w3aRemove(() => {
     renderW3AStatus(null);
     state.userId = null;
