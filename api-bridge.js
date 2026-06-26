@@ -114,10 +114,128 @@ async function getCUSDBalance(address) {
   return cusd.toFixed(4);
 }
 
+// ── Web3Auth JWT verification ──────────────────────────────────────────────
+
+const WEB3AUTH_JWKS_URI = 'https://api-auth.web3auth.io/.well-known/jwks.json';
+const WEB3AUTH_CLIENT_ID = 'BCkzpmFTjh9pTHe7LGNlrg_jo22W7DNHGkkZSbgrQlOeSf7AzRZ1qdZXDRyxplEq5knOTiCjhH-uga6tpnASP1o';
+
+let jwksCache = null;
+let jwksCacheTime = 0;
+const JWKS_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+async function fetchJWKS() {
+  if (jwksCache && Date.now() - jwksCacheTime < JWKS_CACHE_TTL) return jwksCache;
+  const data = await new Promise((resolve, reject) => {
+    https.get(WEB3AUTH_JWKS_URI, res => {
+      let body = '';
+      res.on('data', d => body += d);
+      res.on('end', () => { try { resolve(JSON.parse(body)); } catch(e) { reject(e); } });
+    }).on('error', reject);
+  });
+  jwksCache     = data.keys || [];
+  jwksCacheTime = Date.now();
+  return jwksCache;
+}
+
+function base64UrlDecode(str) {
+  return Buffer.from(str.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+}
+
+function parseJWTHeader(token) {
+  const [headerB64] = token.split('.');
+  return JSON.parse(base64UrlDecode(headerB64).toString('utf8'));
+}
+
+function parseJWTPayload(token) {
+  const parts = token.split('.');
+  if (parts.length !== 3) throw new Error('Invalid JWT format');
+  return JSON.parse(base64UrlDecode(parts[1]).toString('utf8'));
+}
+
+async function verifyWeb3AuthJWT(idToken) {
+  const { createPublicKey, createVerify } = require('crypto');
+
+  const header  = parseJWTHeader(idToken);
+  const payload = parseJWTPayload(idToken);
+  const keys    = await fetchJWKS();
+
+  const jwk = keys.find(k => k.kid === header.kid) || keys[0];
+  if (!jwk) throw new Error('No matching JWK found');
+
+  // Build PEM from JWK
+  const publicKey = createPublicKey({ key: jwk, format: 'jwk' });
+  const [headerB64, payloadB64, signatureB64] = idToken.split('.');
+  const data = `${headerB64}.${payloadB64}`;
+  const sig  = base64UrlDecode(signatureB64);
+
+  const verify = createVerify(header.alg === 'RS256' ? 'RSA-SHA256' : 'SHA256');
+  verify.update(data);
+  const valid = verify.verify(publicKey, sig);
+  if (!valid) throw new Error('JWT signature verification failed');
+
+  // Check expiry
+  if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+    throw new Error('JWT has expired');
+  }
+
+  // Check audience contains our client ID
+  const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+  if (!aud.includes(WEB3AUTH_CLIENT_ID)) {
+    throw new Error('JWT audience mismatch');
+  }
+
+  return payload;
+}
+
 // ── Routes ─────────────────────────────────────────────────────────────────
 
 // Health check
 app.get('/health', (req, res) => res.json({ ok: true, version: '1.0' }));
+
+// Web3Auth JWT verification endpoint
+// The extension calls this after login to validate the idToken using JWKS.
+// Returns a stable userId (verifier:verifierId) for data isolation.
+app.post('/auth/verify-web3auth', async (req, res) => {
+  const { idToken, verifier, verifierId } = req.body;
+  if (!idToken) return res.status(400).json({ error: 'idToken required' });
+
+  try {
+    const payload = await verifyWeb3AuthJWT(idToken);
+    const userId  = `w3a:${verifier || payload.verifier || 'unknown'}:${verifierId || payload.verifierId || payload.sub}`;
+
+    // Create user directory and record first-seen timestamp if new
+    const dir      = userDir(userId);
+    const metaFile = path.join(dir, 'web3auth-meta.json');
+    const existing = readJSON(metaFile);
+    if (!existing) {
+      writeJSON(metaFile, {
+        userId,
+        verifier: verifier || payload.verifier,
+        verifierId: verifierId || payload.verifierId || payload.sub,
+        email: payload.email || '',
+        firstSeenAt: new Date().toISOString(),
+        lastLoginAt: new Date().toISOString(),
+      });
+    } else {
+      writeJSON(metaFile, { ...existing, lastLoginAt: new Date().toISOString() });
+    }
+
+    res.json({ ok: true, userId, email: payload.email || '', sub: payload.sub });
+  } catch (err) {
+    console.warn('[web3auth] JWT verification failed:', err.message);
+    res.status(401).json({ error: 'Invalid Web3Auth token', detail: err.message });
+  }
+});
+
+// GET /auth/me — returns Web3Auth profile for a verified userId
+app.get('/auth/me', (req, res) => {
+  const { userId } = req.query;
+  if (!userId || !userId.startsWith('w3a:')) return res.status(400).json({ error: 'w3a userId required' });
+  const metaFile = path.join(userDir(userId), 'web3auth-meta.json');
+  const meta     = readJSON(metaFile);
+  if (!meta) return res.status(404).json({ error: 'User not found' });
+  res.json(meta);
+});
 
 // Bulk sync — bot pushes full data file to Railway after every update
 app.post('/sync', (req, res) => {

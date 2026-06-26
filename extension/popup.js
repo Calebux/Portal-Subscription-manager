@@ -5,6 +5,126 @@ const BOT_USERNAME   = 'SubmanagerAgentBot';
 // TODO: replace with your real project Celo wallet address
 const PROJECT_WALLET = '0xA6F46Dcaa07C6b56D02379Ec3b2AafDFe3BA0DfA';
 
+// ── Web3Auth ──────────────────────────────────────────────────────────────────
+const WEB3AUTH_LOGIN_PAGE = chrome.runtime.getURL('web3auth-login.html');
+let   web3authTab         = null;
+
+function getW3AUserId() {
+  return new Promise(resolve => {
+    chrome.storage.local.get('web3auth', d => {
+      const w3a = d.web3auth;
+      if (w3a?.idToken && w3a?.verifierId) {
+        resolve(`w3a:${w3a.verifier}:${w3a.verifierId}`);
+      } else {
+        resolve(null);
+      }
+    });
+  });
+}
+
+function openWeb3AuthTab() {
+  chrome.tabs.create({ url: WEB3AUTH_LOGIN_PAGE, active: true }, tab => {
+    web3authTab = tab.id;
+  });
+
+  // Poll chrome.storage for the login result (set by web3auth-login.html)
+  const checkInterval = setInterval(async () => {
+    const data = await new Promise(r => chrome.storage.local.get('web3auth', r));
+    const w3a  = data.web3auth;
+    if (w3a?.idToken && w3a?.loginAt && (Date.now() - w3a.loginAt) < 30000) {
+      clearInterval(checkInterval);
+      renderW3AStatus(w3a);
+      // Verify the token server-side and load data
+      await syncWeb3AuthUser(w3a);
+    }
+  }, 800);
+
+  // Stop polling after 3 minutes (user abandoned login)
+  setTimeout(() => clearInterval(checkInterval), 180000);
+}
+
+function renderW3AStatus(w3a) {
+  if (!w3a?.idToken) {
+    // Logged out state — setup screen
+    document.getElementById('w3a-status')?.classList.add('hidden');
+    document.getElementById('w3a-dashboard-btn')?.classList.add('hidden');
+    document.getElementById('w3a-login-btn')?.classList.remove('hidden');
+
+    // Settings screen
+    document.getElementById('settings-w3a-logged-out')?.classList.remove('hidden');
+    document.getElementById('settings-w3a-logged-in')?.classList.add('hidden');
+    return;
+  }
+
+  const initial = (w3a.name || w3a.email || '?').charAt(0).toUpperCase();
+
+  // Setup screen status
+  const statusEl = document.getElementById('w3a-status');
+  if (statusEl) {
+    statusEl.classList.remove('hidden');
+    statusEl.classList.add('flex');
+    document.getElementById('w3a-avatar').textContent = initial;
+    document.getElementById('w3a-name').textContent   = w3a.name  || 'Web3Auth User';
+    document.getElementById('w3a-email').textContent  = w3a.email || w3a.verifierId || '';
+    document.getElementById('w3a-login-btn')?.classList.add('hidden');
+    document.getElementById('w3a-dashboard-btn')?.classList.remove('hidden');
+  }
+
+  // Settings screen
+  document.getElementById('settings-w3a-logged-out')?.classList.add('hidden');
+  const loggedIn = document.getElementById('settings-w3a-logged-in');
+  if (loggedIn) {
+    loggedIn.classList.remove('hidden');
+    document.getElementById('settings-w3a-avatar').textContent = initial;
+    document.getElementById('settings-w3a-name').textContent   = w3a.name  || 'Web3Auth User';
+    document.getElementById('settings-w3a-email').textContent  = w3a.email || '';
+    document.getElementById('settings-w3a-userid').textContent = `w3a:${w3a.verifier}:${w3a.verifierId}`;
+  }
+}
+
+async function syncWeb3AuthUser(w3a) {
+  // Verify the token with the backend and load user data
+  try {
+    const res = await fetch(`${API}/auth/verify-web3auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken: w3a.idToken, verifier: w3a.verifier, verifierId: w3a.verifierId }),
+      signal: AbortSignal.timeout(6000),
+    });
+
+    if (res.ok) {
+      const userId = `w3a:${w3a.verifier}:${w3a.verifierId}`;
+      state.telegramUserId = userId; // reuse existing userId field for API calls
+      saveState();
+      const gotData = await fetchUserData(false);
+      toast(gotData ? `Welcome back, ${w3a.name || 'user'}!` : `Logged in as ${w3a.name || 'user'}`);
+      showScreen('dashboard');
+    } else {
+      toast('Web3Auth verification failed — please try again');
+    }
+  } catch (_) {
+    // Backend verification unavailable — still allow local use
+    const userId = `w3a:${w3a.verifier}:${w3a.verifierId}`;
+    state.telegramUserId = userId;
+    saveState();
+    toast(`Logged in as ${w3a.name || 'user'} (offline mode)`);
+    showScreen('dashboard');
+  }
+}
+
+async function web3authLogout() {
+  chrome.storage.local.remove('web3auth', () => {
+    renderW3AStatus(null);
+    state.telegramUserId = null;
+    state.subscriptions  = [];
+    state.balance        = 0;
+    state.txHistory      = [];
+    saveState();
+    toast('Signed out of Web3Auth');
+    showScreen('welcome');
+  });
+}
+
 let state = {
   telegramUserId: null,
   subscriptions:  [],
@@ -92,23 +212,26 @@ document.addEventListener('click', e => {
   const filter = el.dataset.filter;
 
   switch (action) {
-    case 'nav':           showScreen(target); break;
-    case 'setupPair':     setupAndPair(); break;
-    case 'openBot':       openBot(); break;
-    case 'refreshData':   refreshData(); break;
-    case 'addSub':        showAddSubModal(); break;
-    case 'saveManualSub': saveManualSub(); break;
-    case 'filter':        if (filter) setFilter(filter); break;
-    case 'saveBudget':    saveBudget(); break;
-    case 'saveTgId':      saveTgId(); break;
-    case 'exportAction':  exportCSV(); break;
-    case 'resetBot':      resetBot(); break;
-    case 'showQR':        showQRModal(); break;
-    case 'copyProjectAddr': copyProjectAddr(); break;
-    case 'closeModal':    if (modal) document.getElementById(modal)?.classList.remove('active'); break;
-    case 'copyNeg':       copyNegotiationEmail(); break;
-    case 'draftEmail':    draftEmail(el.dataset.service); break;
-    case 'togglePref':    togglePref(el); break;
+    case 'nav':              showScreen(target); break;
+    case 'setupPair':        setupAndPair(); break;
+    case 'openBot':          openBot(); break;
+    case 'refreshData':      refreshData(); break;
+    case 'addSub':           showAddSubModal(); break;
+    case 'saveManualSub':    saveManualSub(); break;
+    case 'filter':           if (filter) setFilter(filter); break;
+    case 'saveBudget':       saveBudget(); break;
+    case 'saveTgId':         saveTgId(); break;
+    case 'exportAction':     exportCSV(); break;
+    case 'resetBot':         resetBot(); break;
+    case 'showQR':           showQRModal(); break;
+    case 'copyProjectAddr':  copyProjectAddr(); break;
+    case 'closeModal':       if (modal) document.getElementById(modal)?.classList.remove('active'); break;
+    case 'copyNeg':          copyNegotiationEmail(); break;
+    case 'draftEmail':       draftEmail(el.dataset.service); break;
+    case 'togglePref':       togglePref(el); break;
+    case 'web3authLogin':    openWeb3AuthTab(); break;
+    case 'web3authLogout':   web3authLogout(); break;
+    case 'web3authDashboard': showScreen('dashboard'); break;
   }
 });
 
@@ -465,13 +588,23 @@ function renderTxHistory() {
 
 // ── Settings ──────────────────────────────────────────────────────────────
 function refreshSettings() {
+  // Web3Auth status
+  chrome.storage.local.get('web3auth', d => renderW3AStatus(d.web3auth || null));
+
+  const tgId = state.telegramUserId;
+  const isTgId = tgId && !tgId.startsWith('w3a:');
+
   const tgInput = document.getElementById('settings-tg-id');
-  if (tgInput && state.telegramUserId) tgInput.value = state.telegramUserId;
+  if (tgInput && isTgId) tgInput.value = tgId;
 
   const tgStatus = document.getElementById('tg-pair-status');
-  if (tgStatus && state.telegramUserId) {
-    tgStatus.textContent  = `Paired — ID: ${state.telegramUserId}`;
-    tgStatus.className    = 'text-[10px] text-tertiary';
+  if (tgStatus) {
+    if (isTgId) {
+      tgStatus.textContent = `Paired — ID: ${tgId}`;
+      tgStatus.className   = 'text-[10px] text-tertiary';
+    } else {
+      tgStatus.textContent = '';
+    }
   }
 
   const bInput = document.getElementById('budget-input');
@@ -609,8 +742,24 @@ async function init() {
   drawQR('credits-qr', PROJECT_WALLET);
   document.querySelectorAll('.project-addr-short').forEach(el => el.textContent = shortAddr(PROJECT_WALLET));
 
+  // Load Web3Auth state
+  const w3aData = await new Promise(r => chrome.storage.local.get('web3auth', r));
+  const w3a     = w3aData.web3auth;
+  if (w3a?.idToken) {
+    renderW3AStatus(w3a);
+    // If Web3Auth is the active session, set userId and go to dashboard
+    if (!state.telegramUserId || state.telegramUserId.startsWith('w3a:')) {
+      state.telegramUserId = `w3a:${w3a.verifier}:${w3a.verifierId}`;
+      fetchUserData().catch(() => {});
+      showScreen('dashboard');
+      return;
+    }
+  } else {
+    renderW3AStatus(null);
+  }
+
   if (state.telegramUserId) {
-    // Already paired — refresh in background, show dashboard
+    // Already paired via Telegram — refresh in background, show dashboard
     fetchUserData().catch(() => {});
     showScreen('dashboard');
   } else {

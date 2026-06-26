@@ -19,12 +19,21 @@
   },
   "permissions": [
     "storage",
-    "clipboardWrite"
+    "clipboardWrite",
+    "tabs",
+    "identity"
   ],
   "host_permissions": [
     "http://localhost:3747/*",
     "https://*.railway.app/*",
     "https://rpc.ankr.com/*",
-    "https://api.qrserver.com/*"
-  ]
+    "https://api.qrserver.com/*",
+    "https://*.web3auth.io/*",
+    "https://cdn.jsdelivr.net/*",
+    "https://forno.celo.org/*",
+    "https://api-auth.web3auth.io/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' https://cdn.jsdelivr.net; object-src 'self';"
+  }
 }

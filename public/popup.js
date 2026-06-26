@@ -1,8 +1,129 @@
-/* popup.js — SubBot Web App */
+/* popup.js — SubBot Extension (view layer for @SubmanagerAgentBot) */
 
 const API            = 'https://portal-subscription-manager-production.up.railway.app';
 const BOT_USERNAME   = 'SubmanagerAgentBot';
+// TODO: replace with your real project Celo wallet address
 const PROJECT_WALLET = '0xA6F46Dcaa07C6b56D02379Ec3b2AafDFe3BA0DfA';
+
+// ── Web3Auth ──────────────────────────────────────────────────────────────────
+const WEB3AUTH_LOGIN_PAGE = chrome.runtime.getURL('web3auth-login.html');
+let   web3authTab         = null;
+
+function getW3AUserId() {
+  return new Promise(resolve => {
+    chrome.storage.local.get('web3auth', d => {
+      const w3a = d.web3auth;
+      if (w3a?.idToken && w3a?.verifierId) {
+        resolve(`w3a:${w3a.verifier}:${w3a.verifierId}`);
+      } else {
+        resolve(null);
+      }
+    });
+  });
+}
+
+function openWeb3AuthTab() {
+  chrome.tabs.create({ url: WEB3AUTH_LOGIN_PAGE, active: true }, tab => {
+    web3authTab = tab.id;
+  });
+
+  // Poll chrome.storage for the login result (set by web3auth-login.html)
+  const checkInterval = setInterval(async () => {
+    const data = await new Promise(r => chrome.storage.local.get('web3auth', r));
+    const w3a  = data.web3auth;
+    if (w3a?.idToken && w3a?.loginAt && (Date.now() - w3a.loginAt) < 30000) {
+      clearInterval(checkInterval);
+      renderW3AStatus(w3a);
+      // Verify the token server-side and load data
+      await syncWeb3AuthUser(w3a);
+    }
+  }, 800);
+
+  // Stop polling after 3 minutes (user abandoned login)
+  setTimeout(() => clearInterval(checkInterval), 180000);
+}
+
+function renderW3AStatus(w3a) {
+  if (!w3a?.idToken) {
+    // Logged out state — setup screen
+    document.getElementById('w3a-status')?.classList.add('hidden');
+    document.getElementById('w3a-dashboard-btn')?.classList.add('hidden');
+    document.getElementById('w3a-login-btn')?.classList.remove('hidden');
+
+    // Settings screen
+    document.getElementById('settings-w3a-logged-out')?.classList.remove('hidden');
+    document.getElementById('settings-w3a-logged-in')?.classList.add('hidden');
+    return;
+  }
+
+  const initial = (w3a.name || w3a.email || '?').charAt(0).toUpperCase();
+
+  // Setup screen status
+  const statusEl = document.getElementById('w3a-status');
+  if (statusEl) {
+    statusEl.classList.remove('hidden');
+    statusEl.classList.add('flex');
+    document.getElementById('w3a-avatar').textContent = initial;
+    document.getElementById('w3a-name').textContent   = w3a.name  || 'Web3Auth User';
+    document.getElementById('w3a-email').textContent  = w3a.email || w3a.verifierId || '';
+    document.getElementById('w3a-login-btn')?.classList.add('hidden');
+    document.getElementById('w3a-dashboard-btn')?.classList.remove('hidden');
+  }
+
+  // Settings screen
+  document.getElementById('settings-w3a-logged-out')?.classList.add('hidden');
+  const loggedIn = document.getElementById('settings-w3a-logged-in');
+  if (loggedIn) {
+    loggedIn.classList.remove('hidden');
+    document.getElementById('settings-w3a-avatar').textContent = initial;
+    document.getElementById('settings-w3a-name').textContent   = w3a.name  || 'Web3Auth User';
+    document.getElementById('settings-w3a-email').textContent  = w3a.email || '';
+    document.getElementById('settings-w3a-userid').textContent = `w3a:${w3a.verifier}:${w3a.verifierId}`;
+  }
+}
+
+async function syncWeb3AuthUser(w3a) {
+  // Verify the token with the backend and load user data
+  try {
+    const res = await fetch(`${API}/auth/verify-web3auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken: w3a.idToken, verifier: w3a.verifier, verifierId: w3a.verifierId }),
+      signal: AbortSignal.timeout(6000),
+    });
+
+    if (res.ok) {
+      const userId = `w3a:${w3a.verifier}:${w3a.verifierId}`;
+      state.telegramUserId = userId; // reuse existing userId field for API calls
+      saveState();
+      const gotData = await fetchUserData(false);
+      toast(gotData ? `Welcome back, ${w3a.name || 'user'}!` : `Logged in as ${w3a.name || 'user'}`);
+      showScreen('dashboard');
+    } else {
+      toast('Web3Auth verification failed — please try again');
+    }
+  } catch (_) {
+    // Backend verification unavailable — still allow local use
+    const userId = `w3a:${w3a.verifier}:${w3a.verifierId}`;
+    state.telegramUserId = userId;
+    saveState();
+    toast(`Logged in as ${w3a.name || 'user'} (offline mode)`);
+    showScreen('dashboard');
+  }
+}
+
+async function web3authLogout() {
+  chrome.storage.local.remove('web3auth', () => {
+    renderW3AStatus(null);
+    state.telegramUserId = null;
+    state.subscriptions  = [];
+    state.balance        = 0;
+    state.txHistory      = [];
+    saveState();
+    toast('Signed out of Web3Auth');
+    showScreen('welcome');
+  });
+}
 
 let state = {
   telegramUserId: null,
@@ -17,14 +138,24 @@ function userId() { return state.telegramUserId || 'local'; }
 
 // ── State persistence ─────────────────────────────────────────────────────
 function saveState() {
-  localStorage.setItem('subbot', JSON.stringify(state));
+  try { chrome.storage.local.set({ subbot: state }); } catch(e) {
+    localStorage.setItem('subbot', JSON.stringify(state));
+  }
 }
 
 async function loadState() {
-  try {
-    const d = localStorage.getItem('subbot');
-    if (d) Object.assign(state, JSON.parse(d));
-  } catch(e) {}
+  return new Promise(resolve => {
+    try {
+      chrome.storage.local.get('subbot', data => {
+        if (data.subbot) Object.assign(state, data.subbot);
+        resolve();
+      });
+    } catch(e) {
+      const d = localStorage.getItem('subbot');
+      if (d) Object.assign(state, JSON.parse(d));
+      resolve();
+    }
+  });
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────
@@ -81,23 +212,26 @@ document.addEventListener('click', e => {
   const filter = el.dataset.filter;
 
   switch (action) {
-    case 'nav':           showScreen(target); break;
-    case 'setupPair':     setupAndPair(); break;
-    case 'openBot':       openBot(); break;
-    case 'refreshData':   refreshData(); break;
-    case 'addSub':        showAddSubModal(); break;
-    case 'saveManualSub': saveManualSub(); break;
-    case 'filter':        if (filter) setFilter(filter); break;
-    case 'saveBudget':    saveBudget(); break;
-    case 'saveTgId':      saveTgId(); break;
-    case 'exportAction':  exportCSV(); break;
-    case 'resetBot':      resetBot(); break;
-    case 'showQR':        showQRModal(); break;
-    case 'copyProjectAddr': copyProjectAddr(); break;
-    case 'closeModal':    if (modal) document.getElementById(modal)?.classList.remove('active'); break;
-    case 'copyNeg':       copyNegotiationEmail(); break;
-    case 'draftEmail':    draftEmail(el.dataset.service); break;
-    case 'togglePref':    togglePref(el); break;
+    case 'nav':              showScreen(target); break;
+    case 'setupPair':        setupAndPair(); break;
+    case 'openBot':          openBot(); break;
+    case 'refreshData':      refreshData(); break;
+    case 'addSub':           showAddSubModal(); break;
+    case 'saveManualSub':    saveManualSub(); break;
+    case 'filter':           if (filter) setFilter(filter); break;
+    case 'saveBudget':       saveBudget(); break;
+    case 'saveTgId':         saveTgId(); break;
+    case 'exportAction':     exportCSV(); break;
+    case 'resetBot':         resetBot(); break;
+    case 'showQR':           showQRModal(); break;
+    case 'copyProjectAddr':  copyProjectAddr(); break;
+    case 'closeModal':       if (modal) document.getElementById(modal)?.classList.remove('active'); break;
+    case 'copyNeg':          copyNegotiationEmail(); break;
+    case 'draftEmail':       draftEmail(el.dataset.service); break;
+    case 'togglePref':       togglePref(el); break;
+    case 'web3authLogin':    openWeb3AuthTab(); break;
+    case 'web3authLogout':   web3authLogout(); break;
+    case 'web3authDashboard': showScreen('dashboard'); break;
   }
 });
 
@@ -119,10 +253,6 @@ function shortAddr(addr) {
 
 function copyProjectAddr() {
   navigator.clipboard.writeText(PROJECT_WALLET).then(() => toast('Address copied!'));
-  if (name === 'copyVaultAddr') {
-    const addr = document.getElementById('vault-addr')?.textContent || PROJECT_WALLET;
-    navigator.clipboard.writeText(addr).then(() => toast('Vault address copied!'));
-  }
 }
 
 function showQRModal() {
@@ -152,6 +282,7 @@ async function fetchUserData(silent = true) {
       const d = await r.json();
       const txs = d.transactions || [];
       state.txHistory = txs;
+      // Compute balance from ledger
       state.balance = txs.reduce((sum, tx) => {
         return tx.type === 'deposit' ? sum + (tx.amount || 0) : sum - (tx.amount || 0);
       }, 0);
@@ -229,6 +360,7 @@ function refreshDashboard() {
   const strip = document.getElementById('strip-balance');
   if (strip) strip.textContent = (state.balance || 0).toFixed(2) + ' cUSD';
 
+  // Renewals list
   const renewalDiv = document.getElementById('renewals-list');
   if (!renewalDiv) return;
   const upcoming = subs
@@ -420,73 +552,13 @@ function copyNegotiationEmail() {
   });
 }
 
-// ── Vault / Credits ───────────────────────────────────────────────────────
+// ── Credits ───────────────────────────────────────────────────────────────
 function refreshCredits() {
+  document.getElementById('credits-balance').textContent = (state.balance || 0).toFixed(2);
+  const addrEl = document.getElementById('qr-addr');
+  if (addrEl) addrEl.textContent = shortAddr(PROJECT_WALLET);
+  drawQR('credits-qr', PROJECT_WALLET);
   renderTxHistory();
-  loadVault();
-  loadDecisions();
-}
-
-async function loadVault() {
-  const userId = state.telegramUserId;
-
-  // Show vault address regardless
-  const vaultAddrEl = document.getElementById('vault-addr');
-
-  try {
-    const r    = await fetch(`${API}/vault/${userId || 'local'}`);
-    const data = await r.json();
-
-    if (data.error || data.configured === false) {
-      // Vault not configured — fall back to wallet balance display
-      if (vaultAddrEl) vaultAddrEl.textContent = PROJECT_WALLET;
-      return;
-    }
-
-    // Show vault address
-    if (vaultAddrEl) vaultAddrEl.textContent = data.vaultAddress || PROJECT_WALLET;
-
-    // Principal
-    const principalEl = document.getElementById('vault-principal');
-    if (principalEl) principalEl.textContent = parseFloat(data.principal || 0).toFixed(3);
-
-    // Yield earned (total + pending)
-    const totalYield = parseFloat(data.totalYieldEarned || 0) + parseFloat(data.pending || 0);
-    const yieldEl    = document.getElementById('vault-yield');
-    if (yieldEl) yieldEl.textContent = totalYield.toFixed(4);
-
-    // Credits available
-    const credits    = parseFloat(data.credits || 0) + parseFloat(data.pending || 0);
-    const creditsEl  = document.getElementById('vault-credits');
-    if (creditsEl) creditsEl.textContent = credits.toFixed(4);
-
-    // Self-sustaining badge
-    const badge = document.getElementById('vault-status-badge');
-    if (badge) {
-      if (data.selfSustaining) {
-        badge.classList.remove('hidden');
-      } else {
-        badge.classList.add('hidden');
-        const tagline = document.getElementById('vault-tagline');
-        if (tagline) {
-          const principal = parseFloat(data.principal || 0);
-          const needed    = Math.max(0, 25 - principal).toFixed(0);
-          tagline.textContent = principal > 0
-            ? `Deposit ${needed} more cUSD to reach self-sustaining threshold (25 cUSD).`
-            : 'Deposit 25 cUSD once — yield pays for all operations forever.';
-        }
-      }
-    }
-
-    // Update the dashboard credits strip if principal > 0
-    const strip = document.getElementById('strip-balance');
-    if (strip && parseFloat(data.principal) > 0) {
-      strip.textContent = `${parseFloat(data.principal).toFixed(2)} cUSD`;
-    }
-
-  } catch (_) {
-    if (vaultAddrEl) vaultAddrEl.textContent = PROJECT_WALLET;
-  }
 }
 
 function renderTxHistory() {
@@ -514,56 +586,25 @@ function renderTxHistory() {
   }).join('');
 }
 
-// ── On-chain decision log ─────────────────────────────────────────────────
-async function loadDecisions() {
-  const el = document.getElementById('decisions-list');
-  if (!el) return;
-  try {
-    const uid = state.telegramUserId || 'local';
-    const r   = await fetch(`${API}/decisions?userId=${uid}`, { signal: AbortSignal.timeout(4000) });
-    if (!r.ok) return;
-    const { decisions = [] } = await r.json();
-    if (!decisions.length) return;
-
-    const ACTION_LABEL = {
-      recommend_cancel:    { label: 'Cancel recommended',  color: 'text-red-400' },
-      recommend_negotiate: { label: 'Negotiate recommended', color: 'text-amber-400' },
-      audit_complete:      { label: 'Audit complete',       color: 'text-emerald-400' },
-      daily_digest:        { label: 'Daily digest',         color: 'text-blue-400' },
-    };
-
-    el.innerHTML = decisions.slice(0, 6).map(d => {
-      const meta  = ACTION_LABEL[d.action] || { label: d.action, color: 'text-primary' };
-      const saved = d.amountSavedUSD ? `$${(d.amountSavedUSD / 100).toFixed(0)} identified` : '';
-      const time  = d.timestamp ? new Date(d.timestamp * 1000).toLocaleDateString() : '';
-      const link  = d.txHash
-        ? `<a href="https://celoscan.io/tx/${d.txHash}" target="_blank"
-              class="flex items-center gap-0.5 text-tertiary hover:text-primary">
-             <span class="material-symbols-outlined text-xs">open_in_new</span>
-             <span class="font-mono">CeloScan</span>
-           </a>`
-        : '<span class="text-on-surface-variant font-mono">pending</span>';
-
-      return `<div class="flex items-center justify-between px-3 py-2.5 bg-surface-container-low rounded-xl">
-        <div>
-          <p class="text-xs font-semibold ${meta.color}">${meta.label}</p>
-          <p class="text-[10px] text-on-surface-variant">${[saved, time].filter(Boolean).join(' · ')}</p>
-        </div>
-        <div class="text-[10px]">${link}</div>
-      </div>`;
-    }).join('');
-  } catch(e) {}
-}
-
 // ── Settings ──────────────────────────────────────────────────────────────
 function refreshSettings() {
+  // Web3Auth status
+  chrome.storage.local.get('web3auth', d => renderW3AStatus(d.web3auth || null));
+
+  const tgId = state.telegramUserId;
+  const isTgId = tgId && !tgId.startsWith('w3a:');
+
   const tgInput = document.getElementById('settings-tg-id');
-  if (tgInput && state.telegramUserId) tgInput.value = state.telegramUserId;
+  if (tgInput && isTgId) tgInput.value = tgId;
 
   const tgStatus = document.getElementById('tg-pair-status');
-  if (tgStatus && state.telegramUserId) {
-    tgStatus.textContent  = `Paired — ID: ${state.telegramUserId}`;
-    tgStatus.className    = 'text-[10px] text-tertiary';
+  if (tgStatus) {
+    if (isTgId) {
+      tgStatus.textContent = `Paired — ID: ${tgId}`;
+      tgStatus.className   = 'text-[10px] text-tertiary';
+    } else {
+      tgStatus.textContent = '';
+    }
   }
 
   const bInput = document.getElementById('budget-input');
@@ -619,19 +660,20 @@ async function saveManualSub() {
   if (isNaN(cost) || cost < 0) { toast('Enter a valid cost'); return; }
 
   const sub = {
-    id:               'manual-' + Date.now(),
+    id:              'manual-' + Date.now(),
     name,
-    provider:         document.getElementById('add-sub-provider')?.value?.trim() || name,
-    category:         document.getElementById('add-sub-category')?.value || 'saas',
-    monthly_cost:     cost,
+    provider:        document.getElementById('add-sub-provider')?.value?.trim() || name,
+    category:        document.getElementById('add-sub-category')?.value || 'saas',
+    monthly_cost:    cost,
     monthly_cost_usd: cost,
-    currency:         (document.getElementById('add-sub-currency')?.value?.trim() || 'USD').toUpperCase(),
-    next_renewal:     document.getElementById('add-sub-renewal')?.value || null,
-    status:           'active',
-    health_score:     70,
-    source:           'manual',
+    currency:        (document.getElementById('add-sub-currency')?.value?.trim() || 'USD').toUpperCase(),
+    next_renewal:    document.getElementById('add-sub-renewal')?.value || null,
+    status:          'active',
+    health_score:    70,
+    source:          'manual',
   };
 
+  // Save to bridge (persists for all devices with same userId)
   try {
     await fetch(`${API}/add-sub`, {
       method: 'POST',
@@ -641,6 +683,7 @@ async function saveManualSub() {
     });
   } catch(e) {}
 
+  // Also update local state immediately
   state.subscriptions = [...(state.subscriptions || []), sub];
   saveState();
   document.getElementById('modal-add-sub')?.classList.remove('active');
@@ -656,6 +699,7 @@ async function exportCSV() {
     if (r.ok) { toast('CSV sent to Telegram!'); return; }
   } catch(e) {}
 
+  // Fallback: generate in browser
   const subs = state.subscriptions;
   const csv  = 'Name,Provider,Category,Monthly Cost,Currency,Renewal,Status,Health\n' +
     subs.map(s => `${s.name},${s.provider},${s.category},${s.monthly_cost},${s.currency},${s.next_renewal},${s.status},${s.health_score}`).join('\n');
@@ -694,16 +738,35 @@ async function init() {
   const searchInput = document.getElementById('sub-search');
   if (searchInput) searchInput.addEventListener('input', () => { searchQ = searchInput.value.toLowerCase(); renderSubs(); });
 
+  // Draw project wallet QR on credits screen (static, always the same)
   drawQR('credits-qr', PROJECT_WALLET);
   document.querySelectorAll('.project-addr-short').forEach(el => el.textContent = shortAddr(PROJECT_WALLET));
 
+  // Load Web3Auth state
+  const w3aData = await new Promise(r => chrome.storage.local.get('web3auth', r));
+  const w3a     = w3aData.web3auth;
+  if (w3a?.idToken) {
+    renderW3AStatus(w3a);
+    // If Web3Auth is the active session, set userId and go to dashboard
+    if (!state.telegramUserId || state.telegramUserId.startsWith('w3a:')) {
+      state.telegramUserId = `w3a:${w3a.verifier}:${w3a.verifierId}`;
+      fetchUserData().catch(() => {});
+      showScreen('dashboard');
+      return;
+    }
+  } else {
+    renderW3AStatus(null);
+  }
+
   if (state.telegramUserId) {
+    // Already paired via Telegram — refresh in background, show dashboard
     fetchUserData().catch(() => {});
     showScreen('dashboard');
   } else {
     showScreen('welcome');
   }
 
+  // Background sync every 60s
   setInterval(() => fetchUserData().catch(() => {}), 60000);
 }
 
