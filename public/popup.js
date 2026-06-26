@@ -17,6 +17,19 @@ const CELO_CHAIN = {
 const CURRENCY_SYMBOLS = { USD:'$', EUR:'€', GBP:'£', NGN:'₦', KES:'KSh', GHS:'GH₵', ZAR:'R', 'G$':'G$', cUSD:'cUSD' };
 function cSym(code) { return CURRENCY_SYMBOLS[code] || code || '$'; }
 
+function subFaviconUrl(sub) {
+  const name = (sub.provider || sub.name || '').toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
+  if (!name) return '';
+  return `https://www.google.com/s2/favicons?domain=${name}.com&sz=64`;
+}
+
+function faviconImg(sub, sizeClass = 'w-10 h-10') {
+  const url = subFaviconUrl(sub);
+  if (!url) return `<div class="${sizeClass} rounded-lg bg-surface-container-highest flex items-center justify-center font-bold text-lg text-primary">${sub.name.charAt(0)}</div>`;
+  const initBg = sub.category === 'ai' ? 'text-primary' : 'text-secondary';
+  return `<img src="${url}" alt="${sub.name}" class="${sizeClass} rounded-lg bg-surface-container-highest object-contain" onerror="this.outerHTML='<div class=\\'${sizeClass} rounded-lg bg-surface-container-highest flex items-center justify-center font-bold text-lg ${initBg}\\'>${sub.name.charAt(0)}</div>'"/>`;
+}
+
 // ── GoodDollar contracts (Celo mainnet) ──────────────────────────────────
 const GD_IDENTITY = '0xC361A6E67822a0EDc17D899227dd9FC50BD62F42';
 const GD_UBISCHEME = '0x43d72Ff17701B2DA814620735C39C620Ce0ea4A1';
@@ -389,6 +402,7 @@ document.addEventListener('click', e => {
     case 'toggleTheme':      toggleTheme(); break;
     case 'pwaInstall':       installPWA(); break;
     case 'pwaDismiss':       document.getElementById('pwa-install-banner')?.classList.add('hidden'); localStorage.setItem('pwa-dismissed', '1'); break;
+    case 'shareApp':         shareApp(); break;
   }
 });
 
@@ -526,11 +540,10 @@ function renderSubs() {
   list.innerHTML = subs.map(s => {
     const health  = s.health_score || 0;
     const hColor  = health >= 80 ? 'text-tertiary' : health >= 50 ? 'text-amber-400' : 'text-error';
-    const initBg  = s.category === 'ai' ? 'bg-surface-container-highest text-primary' : 'bg-surface-container-highest text-secondary';
     const cost    = s.monthly_cost_usd || s.monthly_cost || 0;
     const sym     = cSym(s.currency);
     return `<div class="h-[72px] glass rounded-xl px-3 flex items-center gap-3 border border-outline-variant/10 hover:bg-surface-bright/40 transition-all cursor-pointer" data-action="showSubDetail" data-sub-id="${s.id}">
-      <div class="w-10 h-10 rounded-lg ${initBg} flex items-center justify-center font-bold text-lg flex-shrink-0">${s.name.charAt(0)}</div>
+      <div class="flex-shrink-0">${faviconImg(s)}</div>
       <div class="flex-1 min-w-0">
         <div class="flex justify-between items-start">
           <h3 class="font-semibold text-sm truncate">${s.name}</h3>
@@ -566,7 +579,7 @@ function showSubDetail(id) {
 
   content.innerHTML = `
     <div class="flex items-center gap-3 mb-2">
-      <div class="w-12 h-12 rounded-xl bg-surface-container-highest flex items-center justify-center font-bold text-xl text-primary">${sub.name.charAt(0)}</div>
+      ${faviconImg(sub, 'w-12 h-12')}
       <div>
         <h3 class="text-lg font-bold">${sub.name}</h3>
         <p class="text-xs text-on-surface-variant">${sub.provider || sub.name}</p>
@@ -903,6 +916,21 @@ function togglePref(btn) {
   dot.classList.toggle('bg-primary', on);
   dot.classList.toggle('bg-outline', !on);
   dot.classList.toggle('ml-auto', on);
+}
+
+// ── Share ─────────────────────────────────────────────────────────────────
+async function shareApp() {
+  const shareData = {
+    title: 'SubBot — AI Subscription Manager',
+    text: 'Track, audit, and optimise your SaaS spend with SubBot. Free on Celo.',
+    url: 'https://subbotai.xyz',
+  };
+  if (navigator.share) {
+    try { await navigator.share(shareData); return; } catch (_) {}
+  }
+  navigator.clipboard.writeText('Check out SubBot — AI subscription manager on Celo: https://subbotai.xyz')
+    .then(() => toast('Link copied!'))
+    .catch(() => toast('Copy failed'));
 }
 
 // ── Theme Toggle ─────────────────────────────────────────────────────────

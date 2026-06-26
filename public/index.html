@@ -333,13 +333,13 @@
             <p class="text-[10px] text-cyan-400 mt-0.5">✓ Web3Auth connected</p>
           </div>
         </div>
-        <div class="flex gap-2">
-          <div class="flex-1 bg-surface-container-low rounded-lg px-3 py-2">
-            <p class="text-[10px] text-on-surface-variant">User ID</p>
-            <p id="settings-w3a-userid" class="text-[10px] font-mono text-primary truncate">—</p>
-          </div>
-          <button data-action="web3authLogout" class="px-4 py-2 rounded-lg border border-error/30 text-error text-xs font-semibold active:scale-95">Sign out</button>
+        <div class="bg-surface-container-low rounded-lg px-3 py-2">
+          <p class="text-[10px] text-on-surface-variant">User ID</p>
+          <p id="settings-w3a-userid" class="text-[10px] font-mono text-primary truncate">—</p>
         </div>
+        <button data-action="web3authLogout" class="w-full py-2.5 rounded-xl border border-error/30 text-error text-xs font-semibold flex items-center justify-center gap-1.5 active:scale-95">
+          <span class="material-symbols-outlined text-sm">logout</span>Sign Out
+        </button>
       </div>
     </section>
     <section class="space-y-2">
@@ -364,6 +364,7 @@
     </section>
     <section class="space-y-2">
       <button data-action="exportAction" class="w-full py-3 rounded-xl border border-outline-variant/30 text-primary text-sm font-semibold flex items-center justify-center gap-2"><span class="material-symbols-outlined text-sm">download</span>Export CSV</button>
+      <button data-action="shareApp" class="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500/10 to-primary/10 border border-primary/20 text-primary text-sm font-semibold flex items-center justify-center gap-2"><span class="material-symbols-outlined text-sm">share</span>Share SubBot with a Friend</button>
     </section>
     <section class="pt-2 text-center">
       <button data-action="resetBot" class="text-error/60 text-xs font-medium flex items-center justify-center gap-1 mx-auto hover:text-error"><span class="material-symbols-outlined text-xs">restart_alt</span>Reset SubBot</button>
