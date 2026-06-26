@@ -32,12 +32,11 @@ async function getWeb3Auth() {
   web3authInitPromise = (async () => {
     await waitForSDK();
     if (!window.Modal) throw new Error('Web3Auth SDK failed to load');
-    const { Web3Auth, WEB3AUTH_NETWORK } = window.Modal;
+    const { Web3Auth } = window.Modal;
     const instance = new Web3Auth({
       clientId: W3A_CLIENT_ID,
-      web3AuthNetwork: WEB3AUTH_NETWORK?.SAPPHIRE_MAINNET || 'sapphire_mainnet',
-      chains: [CELO_CHAIN],
-      defaultChainId: '0xa4ec',
+      chainConfig: CELO_CHAIN,
+      web3AuthNetwork: 'sapphire_mainnet',
     });
     await instance.init();
     web3authInstance = instance;
@@ -63,7 +62,7 @@ function w3aRemove(cb) {
 async function openWeb3AuthModal() {
   try {
     const w3a = await getWeb3Auth();
-    if (w3a.connected) await w3a.logout();
+    try { if (w3a.connected) await w3a.logout(); } catch (_) {}
     const provider = await w3a.connect();
     if (!provider) { toast('Login cancelled'); return; }
 
