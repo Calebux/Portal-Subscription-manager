@@ -111,10 +111,10 @@ async function initWeb3Auth() {
     document.head.appendChild(s);
   });
 
-  await loadScript('https://cdn.jsdelivr.net/npm/@web3auth/no-modal@9/dist/web3auth-no-modal.umd.min.js');
-  await loadScript('https://cdn.jsdelivr.net/npm/@web3auth/openlogin-adapter@9/dist/openloginAdapter.umd.min.js');
+  await loadScript('https://cdn.jsdelivr.net/npm/@web3auth/no-modal@8.12.4/dist/noModal.umd.min.js');
+  await loadScript('https://cdn.jsdelivr.net/npm/@web3auth/openlogin-adapter@8.12.4/dist/openloginAdapter.umd.min.js');
 
-  const { Web3Auth }        = window.Web3AuthNoModal;
+  const { Web3Auth }        = window.NoModal;
   const { OpenloginAdapter } = window.OpenloginAdapter;
 
   web3auth = new Web3Auth({
