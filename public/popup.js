@@ -14,6 +14,9 @@ const CELO_CHAIN = {
   tickerName: 'CELO',
 };
 
+const CURRENCY_SYMBOLS = { USD:'$', EUR:'€', GBP:'£', NGN:'₦', KES:'KSh', GHS:'GH₵', ZAR:'R', 'G$':'G$', cUSD:'cUSD' };
+function cSym(code) { return CURRENCY_SYMBOLS[code] || code || '$'; }
+
 let web3authInstance = null;
 let web3authInitPromise = null;
 
@@ -103,15 +106,18 @@ async function openWeb3AuthModal() {
 }
 
 function renderW3AStatus(w3a) {
+  const walletStrip = document.getElementById('wallet-strip');
   if (!w3a?.loginAt) {
-    // Logged out — settings screen
     document.getElementById('settings-w3a-logged-out')?.classList.remove('hidden');
     document.getElementById('settings-w3a-logged-in')?.classList.add('hidden');
+    if (walletStrip) walletStrip.classList.add('hidden');
     return;
   }
 
-  const initial = (w3a.name || w3a.email || w3a.walletAddress || '?').charAt(0).toUpperCase();
-  const displayName = w3a.name || w3a.email || (w3a.walletAddress ? w3a.walletAddress.slice(0,6) + '…' + w3a.walletAddress.slice(-4) : 'Connected');
+  const addr = w3a.walletAddress || '';
+  const initial = (w3a.name || w3a.email || addr || '?').charAt(0).toUpperCase();
+  const displayName = w3a.name || w3a.email || (addr ? addr.slice(0,6) + '…' + addr.slice(-4) : 'Connected');
+  const shortAddr = addr ? addr.slice(0,6) + '…' + addr.slice(-4) : '';
 
   // Settings screen
   document.getElementById('settings-w3a-logged-out')?.classList.add('hidden');
@@ -120,9 +126,23 @@ function renderW3AStatus(w3a) {
     loggedIn.classList.remove('hidden');
     document.getElementById('settings-w3a-avatar').textContent = initial;
     document.getElementById('settings-w3a-name').textContent   = displayName;
-    document.getElementById('settings-w3a-email').textContent  = w3a.walletAddress || w3a.email || '';
+    document.getElementById('settings-w3a-email').textContent  = addr || w3a.email || '';
     document.getElementById('settings-w3a-userid').textContent = state.userId || '';
   }
+
+  // Dashboard wallet strip
+  if (walletStrip && addr) {
+    walletStrip.classList.remove('hidden');
+    document.getElementById('strip-wallet').textContent = shortAddr;
+  }
+}
+
+function copyWalletAddress() {
+  w3aGet(w3a => {
+    const addr = w3a?.walletAddress || '';
+    if (!addr) { toast('No wallet connected'); return; }
+    navigator.clipboard.writeText(addr).then(() => toast('Wallet address copied!')).catch(() => toast('Copy failed'));
+  });
 }
 
 
@@ -153,24 +173,14 @@ function userId() { return state.userId || 'local'; }
 
 // ── State persistence ─────────────────────────────────────────────────────
 function saveState() {
-  try { chrome.storage.local.set({ subbot: state }); } catch(e) {
-    localStorage.setItem('subbot', JSON.stringify(state));
-  }
+  localStorage.setItem('subbot', JSON.stringify(state));
 }
 
 async function loadState() {
-  return new Promise(resolve => {
-    try {
-      chrome.storage.local.get('subbot', data => {
-        if (data.subbot) Object.assign(state, data.subbot);
-        resolve();
-      });
-    } catch(e) {
-      const d = localStorage.getItem('subbot');
-      if (d) Object.assign(state, JSON.parse(d));
-      resolve();
-    }
-  });
+  try {
+    const d = localStorage.getItem('subbot');
+    if (d) Object.assign(state, JSON.parse(d));
+  } catch (_) {}
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────
@@ -241,6 +251,7 @@ document.addEventListener('click', e => {
     case 'togglePref':       togglePref(el); break;
     case 'web3authLogin':    openWeb3AuthModal(); break;
     case 'web3authLogout':   web3authLogout(); break;
+    case 'copyWallet':       copyWalletAddress(); break;
   }
 });
 
@@ -337,7 +348,7 @@ function refreshDashboard() {
     return `<div class="bg-surface-container-low p-3 rounded-xl flex items-center justify-between">
       <div class="flex items-center gap-3">
         <div class="w-1.5 h-1.5 rounded-full ${color}"></div>
-        <div><p class="text-sm font-semibold">${s.name}</p><p class="text-[10px] text-on-surface-variant font-mono">${dateStr} · $${s.monthly_cost}</p></div>
+        <div><p class="text-sm font-semibold">${s.name}</p><p class="text-[10px] text-on-surface-variant font-mono">${dateStr} · ${cSym(s.currency)}${s.monthly_cost}</p></div>
       </div>
       <span class="material-symbols-outlined text-on-surface-variant text-sm">chevron_right</span>
     </div>`;
@@ -376,13 +387,13 @@ function renderSubs() {
     const hColor  = health >= 80 ? 'text-tertiary' : health >= 50 ? 'text-amber-400' : 'text-error';
     const initBg  = s.category === 'ai' ? 'bg-surface-container-highest text-primary' : 'bg-surface-container-highest text-secondary';
     const cost    = s.monthly_cost_usd || s.monthly_cost || 0;
-    const cur     = (s.currency && s.currency !== 'USD') ? ` (${s.currency})` : '';
+    const sym     = cSym(s.currency);
     return `<div class="h-[72px] glass rounded-xl px-3 flex items-center gap-3 border border-outline-variant/10 hover:bg-surface-bright/40 transition-all cursor-pointer">
       <div class="w-10 h-10 rounded-lg ${initBg} flex items-center justify-center font-bold text-lg flex-shrink-0">${s.name.charAt(0)}</div>
       <div class="flex-1 min-w-0">
         <div class="flex justify-between items-start">
           <h3 class="font-semibold text-sm truncate">${s.name}</h3>
-          <span class="font-mono text-sm font-medium">$${cost}<span class="text-[10px] text-on-surface-variant">/mo${cur}</span></span>
+          <span class="font-mono text-sm font-medium">${sym}${cost}<span class="text-[10px] text-on-surface-variant">/mo</span></span>
         </div>
         <div class="flex items-center gap-2 mt-0.5">
           <span class="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-secondary/10 text-secondary">${s.category || 'SaaS'}</span>
@@ -421,7 +432,7 @@ function runAudit() {
     const bc    = h >= 80 ? 'bg-tertiary' : h >= 50 ? 'bg-amber-400' : 'bg-error';
     return `<div class="flex items-center justify-between px-3 py-2.5">
       <span class="text-xs truncate flex-1">${s.name}</span>
-      <span class="text-xs font-mono mx-2">$${s.monthly_cost_usd || s.monthly_cost}</span>
+      <span class="text-xs font-mono mx-2">${cSym(s.currency)}${s.monthly_cost_usd || s.monthly_cost}</span>
       <div class="w-16 bg-surface-container rounded-full h-1.5 mr-2"><div class="${bc} h-1.5 rounded-full" style="width:${h}%"></div></div>
       <span class="text-[10px] whitespace-nowrap">${badge}</span>
     </div>`;
@@ -431,7 +442,7 @@ function runAudit() {
   overlaps.forEach(([cat, names]) => {
     const catSubs = subs.filter(s => s.category === cat);
     const minCost = Math.min(...catSubs.map(s => s.monthly_cost_usd || s.monthly_cost || 0));
-    wins.push(`Cancel one of your ${names.length} ${cat} tools — save $${minCost}/mo`);
+    wins.push(`Cancel one of your ${names.length} ${cat} tools — save ~${minCost}/mo`);
   });
   subs.filter(s => (s.health_score || 0) < 50).forEach(s => wins.push(`${s.name} has a low health score (${s.health_score}). Consider cancelling.`));
 
@@ -468,7 +479,7 @@ function renderAlerts() {
         <div class="flex-1 bg-surface-container rounded-xl p-3 border border-outline-variant/10">
           <div class="flex justify-between items-start">
             <div><h3 class="text-sm font-semibold">${s.name}</h3><p class="text-[10px] text-on-surface-variant">${s.provider || ''}</p></div>
-            <span class="font-mono text-sm">$${s.monthly_cost}</span>
+            <span class="font-mono text-sm">${cSym(s.currency)}${s.monthly_cost}</span>
           </div>
           <div class="mt-1.5">${urgLabel}</div>
         </div>
