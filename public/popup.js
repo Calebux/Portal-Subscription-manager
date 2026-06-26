@@ -46,7 +46,7 @@ async function getWeb3Auth() {
       web3AuthNetwork: 'sapphire_mainnet',
     });
     try {
-      await instance.init();
+      await instance.initModal();
     } catch (initErr) {
       console.error('Web3Auth init failed:', initErr);
       web3authInitPromise = null; // allow retry
