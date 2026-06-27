@@ -217,15 +217,10 @@ async function claimGD() {
 
     if (!provider || !from) {
       // No local wallet available — open GoodWallet to claim directly
-      btn.innerHTML = '<i class="fa-solid fa-arrow-up-right-from-square text-sm"></i> Claim on GoodWallet';
+      window.open('https://goodwallet.xyz/en', '_blank');
+      toast('Claim your G$ on GoodWallet, then come back');
+      btn.innerHTML = '<i class="fa-solid fa-hand-holding-dollar text-sm"></i> Claim G$';
       btn.disabled = false;
-      btn.onclick = () => {
-        window.open('https://goodwallet.xyz/en', '_blank');
-        btn.innerHTML = '<i class="fa-solid fa-hand-holding-dollar text-sm"></i> Claim G$';
-        btn.onclick = null;
-        // Re-check when they come back
-      };
-      toast('Opening GoodWallet to claim');
       return;
     }
 
