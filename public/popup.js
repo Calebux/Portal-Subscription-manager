@@ -17,10 +17,40 @@ const CELO_CHAIN = {
 const CURRENCY_SYMBOLS = { USD:'$', EUR:'€', GBP:'£', NGN:'₦', KES:'KSh', GHS:'GH₵', ZAR:'R', 'G$':'G$', cUSD:'cUSD' };
 function cSym(code) { return CURRENCY_SYMBOLS[code] || code || '$'; }
 
+const FAVICON_DOMAINS = {
+  'claude':'anthropic.com','claude pro':'anthropic.com','anthropic':'anthropic.com',
+  'chatgpt':'openai.com','chatgpt plus':'openai.com','openai':'openai.com',
+  'github copilot':'github.com','copilot':'github.com',
+  'cursor':'cursor.com','perplexity':'perplexity.ai','perplexity pro':'perplexity.ai',
+  'midjourney':'midjourney.com','notion':'notion.so','notion ai':'notion.so',
+  'grammarly':'grammarly.com','figma':'figma.com','linear':'linear.app',
+  'vercel':'vercel.com','netlify':'netlify.com','elevenlabs':'elevenlabs.io',
+  'openrouter':'openrouter.ai','replit':'replit.com',
+  'codeium':'codeium.com','windsurf':'codeium.com','codeium / windsurf':'codeium.com',
+  'jasper':'jasper.ai','jasper ai':'jasper.ai','copy.ai':'copy.ai',
+  'runway':'runwayml.com','runway ml':'runwayml.com','pika':'pika.art','pika labs':'pika.art',
+  'google one':'google.com','google workspace':'google.com','google one / workspace':'google.com',
+  'microsoft 365':'microsoft.com','microsoft':'microsoft.com',
+  'dropbox':'dropbox.com','spotify':'spotify.com','netflix':'netflix.com',
+  'discord':'discord.com','discord nitro':'discord.com',
+  'slack':'slack.com','zoom':'zoom.us','loom':'loom.com',
+  'superhuman':'superhuman.com','starlink':'starlink.com',
+  'canva':'canva.com','namecheap':'namecheap.com',
+  'adobe':'adobe.com','adobe creative cloud':'adobe.com',
+  'youtube':'youtube.com','youtube premium':'youtube.com',
+  'apple':'apple.com','icloud':'apple.com',
+  'amazon':'amazon.com','aws':'aws.amazon.com',
+  'hulu':'hulu.com','disney+':'disneyplus.com','disneyplus':'disneyplus.com',
+};
+
 function subFaviconUrl(sub) {
-  const name = (sub.provider || sub.name || '').toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
-  if (!name) return '';
-  return `https://www.google.com/s2/favicons?domain=${name}.com&sz=64`;
+  const name = (sub.provider || sub.name || '').toLowerCase().trim();
+  const nameOnly = (sub.name || '').toLowerCase().trim();
+  const domain = FAVICON_DOMAINS[nameOnly] || FAVICON_DOMAINS[name];
+  if (domain) return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+  const slug = name.replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
+  if (!slug) return '';
+  return `https://www.google.com/s2/favicons?domain=${slug}.com&sz=64`;
 }
 
 function faviconImg(sub, sizeClass = 'w-10 h-10') {
@@ -467,6 +497,7 @@ document.addEventListener('click', e => {
     case 'confirmScanSubs':  confirmScanSubs(); break;
     case 'scanSelectAll':    document.querySelectorAll('#scan-results-list input[type="checkbox"]').forEach(cb => cb.checked = true); break;
     case 'scanSelectNone':   document.querySelectorAll('#scan-results-list input[type="checkbox"]').forEach(cb => cb.checked = false); break;
+    case 'scanAnotherEmail': scanAnotherEmail(); break;
   }
 });
 
@@ -1128,12 +1159,14 @@ let pendingScanSubs = [];
 
 function showScanConfirmModal(found) {
   const existing = new Set(state.subscriptions.map(s => s.name.toLowerCase()));
-  pendingScanSubs = found.map(s => {
+  const pendingNames = new Set(pendingScanSubs.map(s => s.name.toLowerCase()));
+  const newSubs = found.filter(s => !pendingNames.has(s.name.toLowerCase())).map(s => {
     s.id = s.id || ('scan-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6));
     s.status = s.status || 'active';
     s.source = 'gmail';
     return s;
   });
+  pendingScanSubs = [...pendingScanSubs, ...newSubs];
 
   const list = document.getElementById('scan-results-list');
   list.innerHTML = pendingScanSubs.map((s, i) => {
@@ -1164,6 +1197,14 @@ function showScanConfirmModal(found) {
 
   toast(`Found ${found.length} subscription${found.length === 1 ? '' : 's'}!`);
   document.getElementById('modal-scan-confirm')?.classList.add('active');
+}
+
+function scanAnotherEmail() {
+  // Keep the confirm modal data but open scan modal for another account
+  document.getElementById('modal-scan-confirm')?.classList.remove('active');
+  document.getElementById('gmail-scan-email').value = '';
+  document.getElementById('gmail-scan-password').value = '';
+  document.getElementById('modal-gmail-scan')?.classList.add('active');
 }
 
 function confirmScanSubs() {
