@@ -128,11 +128,14 @@ async function checkGDStatus(address) {
     }
 
     if (!isWhitelisted) {
-      statusEl.innerHTML = 'Not verified. <button id="gd-check-injected" class="text-emerald-500 underline text-xs">Connect GoodDollar wallet</button>';
+      statusEl.innerHTML = window.ethereum
+        ? 'Verified? Tap below to link your GoodDollar wallet. <button id="gd-check-injected" class="text-emerald-500 underline text-xs font-bold">Connect GoodDollar Wallet</button>'
+        : 'Verify on GoodWallet, then reopen SubBot.';
       verifyLink?.classList.remove('hidden');
       verifyLink?.classList.add('inline-flex');
-      // Add click handler for connecting injected wallet
-      document.getElementById('gd-check-injected')?.addEventListener('click', connectGDWallet);
+      if (document.getElementById('gd-check-injected')) {
+        document.getElementById('gd-check-injected').addEventListener('click', connectGDWallet);
+      }
       return;
     }
 
@@ -1333,6 +1336,15 @@ async function init() {
     showScreen('welcome');
     waitForSDK().then(() => openWeb3AuthModal());
   }
+
+  // Re-check GD status when user returns from GoodWallet verification tab
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      w3aGet(w3a => {
+        if (w3a?.walletAddress) checkGDStatus(w3a.walletAddress).catch(() => {});
+      });
+    }
+  });
 
   // Show startup renewal alerts for subs due within 3 days
   setTimeout(() => {
