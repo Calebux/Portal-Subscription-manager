@@ -1,4 +1,4 @@
-const CACHE_NAME = 'subbot-v3';
+const CACHE_NAME = 'subbot-v4';
 const SHELL_ASSETS = [
   '/',
   '/index.html',
@@ -50,7 +50,8 @@ self.addEventListener('fetch', e => {
       url.pathname.startsWith('/deduct') ||
       url.pathname.startsWith('/sync') ||
       url.pathname.startsWith('/log-decision') ||
-      url.pathname.startsWith('/charge-mode')) {
+      url.pathname.startsWith('/charge-mode') ||
+      url.pathname.startsWith('/push')) {
     return;
   }
 
@@ -70,3 +71,84 @@ self.addEventListener('periodicsync', e => {
     );
   }
 });
+
+// ── Push Notifications ───────────────────────────────────────────────────
+
+// Stored subscription data from popup.js
+let renewalSubs = [];
+
+// Handle push events (future server-side push support)
+self.addEventListener('push', e => {
+  const data = e.data ? e.data.json() : {};
+  e.waitUntil(
+    self.registration.showNotification(data.title || 'SubBot', {
+      body: data.body || 'You have a subscription update',
+      icon: '/icon-192.png',
+      badge: '/favicon-32.png',
+      tag: data.tag || 'subbot-push',
+      data: { url: data.url || '/' },
+    })
+  );
+});
+
+// Handle notification clicks — open/focus the app
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = e.notification.data?.url || '/';
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+      const existing = clients.find(c => c.url.includes(self.location.origin));
+      if (existing) {
+        existing.focus();
+        existing.postMessage({ type: 'nav', screen: 'alerts' });
+      } else {
+        self.clients.openWindow(url);
+      }
+    })
+  );
+});
+
+// Receive subscription data from popup.js
+self.addEventListener('message', e => {
+  if (e.data?.type === 'schedule-renewals') {
+    renewalSubs = e.data.subs || [];
+    checkRenewals();
+  }
+});
+
+// Check renewals and fire OS notifications
+function checkRenewals() {
+  if (!renewalSubs.length) return;
+  const now = new Date();
+  const notified = new Set(JSON.parse(self._notifiedKeys || '[]'));
+
+  renewalSubs.forEach(sub => {
+    if (!sub.next_renewal || sub.status !== 'active') return;
+    const days = Math.ceil((new Date(sub.next_renewal) - now) / 86400000);
+    const key = `${sub.id || sub.name}-${sub.next_renewal}-${days}`;
+
+    if (notified.has(key)) return;
+    if (days < 0 || days > 3) return;
+
+    let body;
+    if (days === 0) body = `${sub.name} renews TODAY — ${sub.currency || '$'}${sub.monthly_cost}/mo`;
+    else if (days === 1) body = `${sub.name} renews TOMORROW — ${sub.currency || '$'}${sub.monthly_cost}/mo`;
+    else body = `${sub.name} renews in ${days} days — ${sub.currency || '$'}${sub.monthly_cost}/mo`;
+
+    self.registration.showNotification('SubBot · Renewal Alert', {
+      body,
+      icon: '/icon-192.png',
+      badge: '/favicon-32.png',
+      tag: `renewal-${sub.id || sub.name}-${days}`,
+      data: { url: '/' },
+      renotify: true,
+    });
+
+    notified.add(key);
+  });
+
+  self._notifiedKeys = JSON.stringify([...notified]);
+}
+
+// Check renewals every hour
+setInterval(checkRenewals, 60 * 60 * 1000);

@@ -463,6 +463,7 @@ document.addEventListener('click', e => {
     case 'runGmailScan':     runGmailScan(); break;
     case 'scanGmail':        runSettingsGmailScan(); break;
     case 'copyVaultAddr':    copyVaultAddr(); break;
+    case 'togglePushNotifications': togglePushNotifications(); break;
   }
 });
 
@@ -934,6 +935,7 @@ async function saveManualSub() {
   document.getElementById('modal-add-sub')?.classList.remove('active');
   renderSubs();
   refreshDashboard();
+  scheduleRenewalNotifications();
 
   // Immediate renewal alert if within 7 days
   if (sub.next_renewal) {
@@ -1071,6 +1073,7 @@ async function runGmailScan() {
     document.getElementById('modal-gmail-scan')?.classList.remove('active');
     renderSubs();
     refreshDashboard();
+    scheduleRenewalNotifications();
   } catch (err) {
     console.error('Gmail scan error:', err);
     toast(err.message || 'Scan failed — check credentials');
@@ -1130,6 +1133,69 @@ async function installPWA() {
   deferredInstallPrompt = null;
 }
 
+// ── Push Notifications ───────────────────────────────────────────────────
+function requestNotificationPermission() {
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
+  if (Notification.permission !== 'default') return;
+  if (localStorage.getItem('push-asked')) return;
+  setTimeout(() => {
+    if (Notification.permission !== 'default') return;
+    localStorage.setItem('push-asked', '1');
+    Notification.requestPermission();
+  }, 5000);
+}
+
+function scheduleRenewalNotifications() {
+  if (!('serviceWorker' in navigator)) return;
+  if (Notification.permission !== 'granted') return;
+  if (localStorage.getItem('push-enabled') === 'false') return;
+  navigator.serviceWorker.ready.then(reg => {
+    if (!reg.active) return;
+    const subs = (state.subscriptions || []).filter(s => s.status === 'active' && s.next_renewal);
+    reg.active.postMessage({ type: 'schedule-renewals', subs });
+  });
+}
+
+function togglePushNotifications() {
+  if (!('Notification' in window)) { toast('Notifications not supported'); return; }
+  const current = localStorage.getItem('push-enabled') !== 'false';
+  if (current) {
+    localStorage.setItem('push-enabled', 'false');
+    toast('Push notifications disabled');
+  } else {
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().then(perm => {
+        if (perm === 'granted') {
+          localStorage.setItem('push-enabled', 'true');
+          toast('Push notifications enabled');
+          scheduleRenewalNotifications();
+        } else {
+          toast('Permission denied by browser');
+        }
+        renderPushToggle();
+      });
+      return;
+    } else if (Notification.permission === 'denied') {
+      toast('Blocked — enable in browser settings');
+      return;
+    }
+    localStorage.setItem('push-enabled', 'true');
+    toast('Push notifications enabled');
+    scheduleRenewalNotifications();
+  }
+  renderPushToggle();
+}
+
+function renderPushToggle() {
+  const btn = document.getElementById('push-toggle-btn');
+  if (!btn) return;
+  const enabled = ('Notification' in window) && Notification.permission === 'granted' && localStorage.getItem('push-enabled') !== 'false';
+  btn.textContent = enabled ? 'Disable' : 'Enable';
+  btn.className = enabled
+    ? 'px-4 py-1.5 rounded-lg bg-error/10 text-error text-xs font-bold active:scale-95 transition-all'
+    : 'px-4 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-bold active:scale-95 transition-all';
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────
 async function init() {
   applyTheme();
@@ -1178,6 +1244,19 @@ async function init() {
       showAlertBadge();
     }
   }, 2000);
+
+  // Push notifications
+  requestNotificationPermission();
+  scheduleRenewalNotifications();
+  renderPushToggle();
+
+  // Handle SW messages (e.g. notification click → navigate to alerts)
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', e => {
+      if (e.data?.type === 'nav' && e.data.screen) showScreen(e.data.screen);
+      if (e.data?.type === 'refresh-data') fetchUserData().catch(() => {});
+    });
+  }
 
   // Background sync every 60s
   setInterval(() => fetchUserData().catch(() => {}), 60000);

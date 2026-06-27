@@ -375,9 +375,18 @@
         </div>
         <input id="settings-email" type="email" placeholder="you@gmail.com" class="w-full bg-field border border-edge rounded-lg py-2.5 px-3.5 text-xs text-main focus:outline-none focus:border-primary"/>
         <input id="settings-password" type="password" placeholder="Google App Password" class="w-full bg-field border border-edge rounded-lg py-2.5 px-3.5 text-xs font-mono text-main focus:outline-none focus:border-primary"/>
+        <p class="text-[10px] text-muted"><i class="fa-solid fa-circle-info text-primary mr-1"></i>Need an App Password? <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener" class="text-primary hover:underline font-semibold">Create one here</a> (requires 2FA enabled)</p>
         <button data-action="scanGmail" class="w-full py-2.5 rounded-lg bg-primary text-white text-xs font-bold active:scale-95 flex items-center justify-center gap-2 transition-transform shadow-sm">
           <i class="fa-solid fa-magnifying-glass text-xs"></i> Run Inbox Scanner
         </button>
+      </div>
+    </section>
+    <section class="space-y-2">
+      <h3 class="text-muted font-bold text-xs uppercase tracking-widest pl-1">Push Notifications</h3>
+      <div class="bg-panel border border-edge rounded-xl p-4 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-field border border-edge flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-bell text-primary text-base"></i></div>
+        <div class="flex-1 min-w-0"><p class="text-sm font-bold text-main">Renewal Alerts</p><p class="text-[10px] text-muted">OS-level alerts before subscriptions renew</p></div>
+        <button id="push-toggle-btn" data-action="togglePushNotifications" class="px-4 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-bold active:scale-95 transition-all">Enable</button>
       </div>
     </section>
     <section class="space-y-2">
@@ -453,6 +462,17 @@
     <div class="space-y-3 mb-4">
       <div><label class="text-[10px] uppercase tracking-widest text-muted font-bold">Gmail Address</label><input id="gmail-scan-email" type="email" placeholder="you@gmail.com" class="w-full bg-field border border-edge rounded-lg py-2 px-3 text-xs mt-1 text-main"/></div>
       <div><label class="text-[10px] uppercase tracking-widest text-muted font-bold">App Password</label><input id="gmail-scan-password" type="password" placeholder="xxxx xxxx xxxx xxxx" class="w-full bg-field border border-edge rounded-lg py-2 px-3 text-xs font-mono mt-1 text-main"/></div>
+      <div class="bg-field border border-edge rounded-lg p-3 space-y-1.5">
+        <p class="text-[10px] font-bold text-muted uppercase tracking-wider"><i class="fa-solid fa-circle-info text-primary mr-1"></i>How to get an App Password</p>
+        <ol class="text-[10px] text-muted space-y-1 pl-3 list-decimal">
+          <li>Go to <a href="https://myaccount.google.com/security" target="_blank" rel="noopener" class="text-primary hover:underline font-semibold">Google Account Security</a></li>
+          <li>Enable <strong class="text-main">2-Step Verification</strong> if not already on</li>
+          <li>Search "App Passwords" or visit <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener" class="text-primary hover:underline font-semibold">App Passwords</a></li>
+          <li>Create a new app password (name it "SubBot")</li>
+          <li>Copy the 16-character code and paste it above</li>
+        </ol>
+        <p class="text-[10px] text-muted"><i class="fa-solid fa-lock text-[8px] mr-1"></i>Your password is sent directly to Gmail's IMAP server and never stored.</p>
+      </div>
     </div>
     <button data-action="runGmailScan" class="w-full py-3 rounded-xl signature-glow font-bold text-sm shadow-md active:scale-95 flex items-center justify-center gap-2 transition-transform">
       <i class="fa-solid fa-magnifying-glass text-sm"></i> Start Scan
