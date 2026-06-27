@@ -1,4 +1,4 @@
-const CACHE_NAME = 'subbot-v5';
+const CACHE_NAME = 'subbot-v6';
 const SHELL_ASSETS = [
   '/',
   '/index.html',
@@ -55,9 +55,17 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Cache-first for static assets
+  // Stale-while-revalidate for shell assets — serve cached, refresh in background
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
+    caches.open(CACHE_NAME).then(cache =>
+      cache.match(e.request).then(cached => {
+        const fetched = fetch(e.request).then(resp => {
+          if (resp.ok) cache.put(e.request, resp.clone());
+          return resp;
+        }).catch(() => cached);
+        return cached || fetched;
+      })
+    )
   );
 });
 
@@ -113,6 +121,15 @@ self.addEventListener('message', e => {
   if (e.data?.type === 'schedule-renewals') {
     renewalSubs = e.data.subs || [];
     checkRenewals();
+  }
+  if (e.data?.type === 'budget-exceeded') {
+    self.registration.showNotification(e.data.title || 'SubBot · Budget Exceeded', {
+      body: e.data.body || 'Monthly spend has passed your budget',
+      icon: '/icon-192.png',
+      badge: '/favicon-32.png',
+      tag: 'budget-exceeded',
+      data: { url: '/' },
+    });
   }
 });
 

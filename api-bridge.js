@@ -694,12 +694,13 @@ app.get('/history', (req, res) => {
 
 // Save budget
 app.post('/budget', (req, res) => {
-  const { budget, userId = 'local' } = req.body;
+  const { budget, budgetCurrency, userId = 'local' } = req.body;
   const file = path.join(userDir(userId), 'scanned-subscriptions.json');
   const data = readJSON(file) || { subscriptions: [], cancellation_history: [] };
   data.monthly_budget = budget;
+  if (budgetCurrency) data.budget_currency = budgetCurrency;
   writeJSON(file, data);
-  res.json({ ok: true, budget });
+  res.json({ ok: true, budget, budgetCurrency: data.budget_currency });
 });
 
 // ── Start ──────────────────────────────────────────────────────────────────

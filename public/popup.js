@@ -691,6 +691,7 @@ let state = {
   userId:         null,
   subscriptions:  [],
   budget:         100,
+  budgetCurrency: 'USD',
   balance:        0,
   txHistory:      [],
 };
@@ -854,13 +855,29 @@ function refreshDashboard() {
   const mainCur = currencies.sort((a,b) => currencies.filter(v=>v===b).length - currencies.filter(v=>v===a).length)[0] || 'USD';
   const sym = cSym(mainCur);
 
+  const budgetSym = cSym(state.budgetCurrency || 'USD');
   document.getElementById('dash-spend').textContent  = sym + monthly.toFixed(0);
-  document.getElementById('dash-budget').textContent = '/ ' + sym + budget;
+  document.getElementById('dash-budget').textContent = '/ ' + budgetSym + budget;
   document.getElementById('dash-pct').textContent    = pct + '%';
   const ring = document.getElementById('budget-ring');
   if (ring) {
     ring.setAttribute('stroke-dashoffset', 376.99 * (1 - pct / 100));
     ring.classList.toggle('text-error', pct >= 100);
+  }
+
+  // Push notification when budget exceeded (once per day)
+  if (pct >= 100 && Notification.permission === 'granted') {
+    const today = new Date().toDateString();
+    if (localStorage.getItem('budget-exceeded-date') !== today) {
+      localStorage.setItem('budget-exceeded-date', today);
+      if (navigator.serviceWorker?.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'budget-exceeded',
+          title: 'SubBot · Budget Exceeded',
+          body: `Monthly spend (${sym}${monthly.toFixed(0)}) has passed your ${budgetSym}${budget} budget`,
+        });
+      }
+    }
   }
 
   document.getElementById('stat-count').textContent    = subs.length;
@@ -1229,15 +1246,19 @@ function refreshSettings() {
 
   const bInput = document.getElementById('budget-input');
   if (bInput) bInput.value = state.budget || 100;
+  const bCur = document.getElementById('budget-currency');
+  if (bCur) bCur.value = state.budgetCurrency || 'USD';
 }
 
 async function saveBudget() {
   const v = parseFloat(document.getElementById('budget-input').value);
   if (!isNaN(v) && v > 0) {
     state.budget = v;
+    state.budgetCurrency = document.getElementById('budget-currency')?.value || 'USD';
     saveState();
-    try { await fetch(`${API}/budget`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ budget: v, userId: userId() }) }); } catch(e) {}
+    try { await fetch(`${API}/budget`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ budget: v, budgetCurrency: state.budgetCurrency, userId: userId() }) }); } catch(e) {}
     toast('Budget saved!');
+    refreshDashboard();
   }
 }
 
