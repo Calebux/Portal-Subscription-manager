@@ -1,171 +1,105 @@
-# SubBot — Autonomous AI Subscription Agent powered by GoodDollar
+# SubBot — AI Subscription Manager That Pays for Itself
 
-> An AI agent that watches your subscriptions 24/7, reasons about your finances, acts without being asked — and pays for itself using your daily **G$ UBI earnings**. Your principal stays untouched.
+> You're paying for Claude, ChatGPT, Cursor, Copilot, Midjourney, Notion, Linear, Vercel, Railway, Supabase, Planetscale, Datadog, and fourteen other things you forgot about. SubBot finds them, audits them, and runs forever on **free GoodDollar UBI** — no credit card, no top-ups.
 
 **Live now →**
-- Web app: [portal-subscription-manager-production.up.railway.app](https://portal-subscription-manager-production.up.railway.app)
+- Web: [subbotai.xyz](https://subbotai.xyz)
 - Telegram: [@SubmanagerAgentBot](https://t.me/SubmanagerAgentBot)
-- SubBotVault: [0x48720eeDdCc1Cf3B2C613Dc093869a2332841e62](https://celoscan.io/address/0x48720eeDdCc1Cf3B2C613Dc093869a2332841e62)
-- SubBotLog: [0x5bc06976e5b46fd624195EFdD0bFC45a73569003](https://celoscan.io/address/0x5bc06976e5b46fd624195EFdD0bFC45a73569003)
+- SubBotVault: [`0x48720eeDdCc1Cf3B2C613Dc093869a2332841e62`](https://celoscan.io/address/0x48720eeDdCc1Cf3B2C613Dc093869a2332841e62)
+- SubBotLog: [`0x5bc06976e5b46fd624195EFdD0bFC45a73569003`](https://celoscan.io/address/0x5bc06976e5b46fd624195EFdD0bFC45a73569003)
 
 ---
 
-## Why GoodDollar + SubBot
+## The subscription explosion nobody talks about
 
-[GoodDollar](https://gooddollar.org) distributes free **G$** to verified members every day — a universal basic income on Celo. Most people collect it and don't know what to do with it.
+It's not 2019 anymore. You don't have 3 subscriptions — you have 20.
 
-SubBot gives G$ a job: **pay for your AI subscription manager with UBI you earned for free.**
+**AI tools alone:**
+Claude Pro ($20) + ChatGPT Plus ($20) + Cursor Pro ($20) + GitHub Copilot ($10) + Midjourney ($10) + Perplexity ($20) + Grok ($8) + v0 ($20) — that's **$128/month** just on AI, and most people use 2-3 of these regularly while the rest auto-renew silently.
 
-Every scan, audit, and negotiation email the agent runs costs a tiny fraction of G$. If you claim your daily G$ and never touch it, SubBot can run indefinitely — entirely self-funded from income you would have ignored.
+**Developer infrastructure:**
+Vercel Pro ($20) + Railway ($5-20) + Supabase Pro ($25) + Planetscale ($29) + Neon ($19) + Cloudflare Workers ($5) + Render ($7) + Datadog ($15) + Sentry ($26) — another **$170/month** on infra, half of which is running hobby projects that went cold six months ago.
 
-This is what financial inclusion looks like in practice. Not a crypto wallet you have to top up. An agent that earns its own keep from your daily UBI, while saving you hundreds of dollars a year on forgotten subscriptions.
+**The rest:**
+Netflix, Spotify, YouTube Premium, iCloud, Google One, 1Password, Notion, Linear, Figma, Canva, Grammarly, domains on three different registrars, that monitoring service you set up once...
 
----
+The average developer or knowledge worker is bleeding **$300-500/month** across 15-30 subscriptions. Nobody audits them. Nobody catches the overlaps (Claude + ChatGPT + Copilot all doing code completion). Nobody cancels before the trial-to-paid conversion hits.
 
-## The problem
-
-The average person wastes **$300+ per year** on forgotten or overlapping SaaS subscriptions. AI tools especially — Claude Pro, ChatGPT Plus, Copilot, Cursor — stack up fast. Nobody audits them until the credit card statement arrives.
-
-Every existing solution is passive: connect a bank account, see a list. You still have to figure out what to do.
-
-SubBot is different. It figures out what to do for you — and tells you before you even think to ask.
+**SubBot does.**
 
 ---
 
-## What makes this a real agent
+## What SubBot actually does
 
-Most "AI agents" are chatbots with a tool belt. You ask, they answer. The intelligence is reactive.
+SubBot is an autonomous AI agent — not a dashboard you check once and forget.
 
-SubBot runs on a different model:
-
-### 1. It acts without being asked
+### It acts without being asked
 
 Every morning at 9:05am, SubBot's digest agent wakes up independently. It loads every user's subscription portfolio, feeds it to the LLM, and asks: *is there anything worth telling this person today?*
 
-If a subscription renews in 4 days, the agent sends a message. If the user just crossed their budget limit, the agent sends a message. If nothing is actionable, it stays silent — no noise, no check-ins. **The agent decides.**
+If a subscription renews in 4 days — you get a message. If you crossed your budget — you get a message. If nothing is actionable — silence. **The agent decides.**
 
-```python
-# agent-digest.py — runs daily via launchd, no user prompt required
-for user_id in get_all_user_ids():
-    briefing = generate_briefing(user_id, user_data)  # LLM decides: send or null
-    if briefing:
-        send_telegram(user_id, briefing)
-```
+### The LLM does the reasoning, not hardcoded rules
 
-### 2. The LLM does the reasoning — not Python formulas
+SubBot doesn't use `if cost > threshold: alert()`. Your full portfolio — costs, renewal dates, overlaps, usage health, budget — goes to the LLM. It reasons contextually:
 
-Old approach: `if health_score < 50: verdict = "cancel"`. Hardcoded thresholds. Same output for every user.
+> *"You have Claude Pro ($20), ChatGPT Plus ($20), and GitHub Copilot ($10). All three overlap on code generation. If you're shipping code daily, keep Claude + Copilot and cancel ChatGPT Plus before June 28 — that's $240/year back. ChatGPT's web browsing is now available free."*
 
-New approach: the full subscription portfolio — costs, renewal dates, overlaps, usage health, budget — goes directly to the LLM. It reasons contextually:
+That's judgment, not formulas.
 
-> *"You have Claude Pro ($20), ChatGPT Plus ($20), and GitHub Copilot ($10). All three are AI tools. If you're a developer, Copilot has the highest ROI of the three. Cancel ChatGPT Plus before March 28 to avoid another charge — that's $240/year back."*
+### Every decision is logged on Celo
 
-That's not a formula. That's judgment.
+Every recommendation creates an immutable transaction on Celo mainnet via `SubBotLog.sol` — action type, estimated savings, timestamp. The agent's track record lives on-chain permanently.
 
-### 3. Every decision is logged on Celo
+### Gmail scan finds everything
 
-When SubBot makes a recommendation — cancel, negotiate, audit complete — it doesn't just send a Telegram message. It writes an immutable record to a smart contract on Celo mainnet:
+Connect Gmail (via the Telegram bot or web app) and SubBot scans 120 days of receipts across 50+ known billing patterns — Stripe, Apple, Google Play, PayPal, direct merchants. It catches subscriptions you forgot existed.
 
-```solidity
-// SubBotLog.sol — deployed at 0x5bc06976e5b46fd624195EFdD0bFC45a73569003
-event DecisionLogged(
-    address indexed agent,
-    bytes32 indexed userHash,   // privacy-preserving
-    string  action,             // "recommend_cancel", "audit_complete", etc.
-    uint256 amountSavedUSD,     // estimated saving in cents
-    uint256 timestamp
-);
-```
+### Negotiation emails with real leverage
 
-Every agent action creates a transaction. The agent's track record lives on-chain permanently. You can verify it. No one can change it.
+Tell SubBot to negotiate a service and it drafts a personalized retention email using your actual data — tenure length, competitor services you already pay for, historical pricing, expected discount percentage.
 
-### 4. It pays for itself — from your G$ UBI
+---
 
-This is the model that makes SubBot genuinely useful for GoodDollar users.
+## How GoodDollar makes this free forever
 
-**Old model:** pay-per-run in cUSD. You top up manually. The agent is a service you pay for.
+[GoodDollar](https://gooddollar.org) distributes free **G$** tokens to verified members every day — universal basic income on Celo.
 
-**New model:** your daily G$ UBI claims accumulate in `SubBotVault`. The agent spends from that balance — never from your principal. You collect G$ for free every day; the agent converts the micro-amounts into real AI work.
+Most people collect G$ and don't know what to do with it. **SubBot gives G$ a job.**
 
-```
-GoodDollar daily claim  →  G$ arrives in your wallet
-         │
-         ▼
-   SubBotVault.sol  →  G$ balance accrues
-         │
-         ├── principal: your G$ ← Agent can NEVER touch this.
-         │
-         └── daily UBI yield covers all operations:
-               ├── scans, audits, exports
-               └── self-sustaining indefinitely from free UBI
-```
-
-Alternatively, users who want maximum yield can deposit cUSD into the vault, which is immediately supplied to **Aave v3 on Celo**, earning real market-rate interest from borrowers. The agent harvests that yield for operations — your deposit stays locked in Aave.
-
-```solidity
-// deposit → straight into Aave, earning real yield immediately
-AAVE.supply(address(CUSD), amount, address(this), 0);
-
-// yield tracked using Aave's own interest index — no oracle, no trust
-uint256 yield = principal * (currentIndex - lastIndex) / lastIndex;
-```
+Every operation costs a fraction of G$:
 
 | Action | Cost |
 |--------|------|
+| View dashboard | **Free** |
 | Daily digest | **Free** |
 | Renewal alerts | **Free** |
-| Gmail scan | ~0.002 G$ / cUSD |
-| LLM portfolio audit | ~0.002 G$ / cUSD |
-| CSV export | ~0.001 G$ / cUSD |
+| Gmail scan | 0.10 G$ |
+| AI portfolio audit | 0.05 G$ |
+| CSV export | 0.05 G$ |
+| Negotiation email | 0.10 G$ |
 
-**One week of daily G$ claims covers a month of full operation.** No wallet top-ups. No card on file. Just UBI doing its job.
+**One week of daily G$ claims covers a month of full operation.** No wallet top-ups. No card on file. Just UBI doing its job — saving you hundreds on subscriptions you would have kept paying for.
 
-**No G$? No problem.** SubBot also runs pay-per-run — the bot tells you the cost before each operation and you confirm. Or deposit any amount of cUSD to activate Aave yield mode.
+### Three funding modes
 
 | Mode | How it works |
 |------|-------------|
 | **G$ UBI** | Claim daily G$ → agent spends micro-amounts → runs forever from free income |
-| **Vault (cUSD)** | Deposit once → Aave earns yield → agent spends from yield. Zero prompts. |
-| **Pay-per-run** | No deposit. Bot sends cost before each operation, you confirm. |
+| **Vault (cUSD)** | Deposit once → Aave v3 earns yield → agent spends from yield only |
+| **Pay-per-run** | No deposit needed. Bot shows cost before each action, you confirm. |
 
-Works natively with **MiniPay** — the GoodDollar wallet built into Opera Mini. No browser extension needed. Multi-currency support (NGN, GBP, EUR → USD) means it works for users most Western fintech tools ignore — exactly the GoodDollar demographic.
+The vault integrates directly with **Aave v3 on Celo** — your cUSD deposit earns real market-rate interest from borrowers. The agent harvests yield for operations. Your principal stays locked and untouched.
 
 ---
 
 ## Login with Web3Auth
 
-SubBot now supports **Web3Auth** authentication — no Telegram ID required, no seed phrase, no wallet setup.
+No seed phrase. No wallet extension. No Telegram ID required.
 
-Sign in with Google, Twitter, Discord, or email. One click. Web3Auth issues a verified JWT; SubBot validates it against the Web3Auth JWKS endpoint and creates an isolated user account automatically.
+Sign in with Google, Twitter, Discord, or email. Web3Auth issues a verified JWT; SubBot validates it and creates your isolated account. GoodDollar users can sign in with the same social login they already use — zero friction.
 
-This means GoodDollar users who already have a GoodDollar identity can sign into SubBot with the same social login — no extra accounts, no friction.
-
-**Login flow:**
-1. Click **Login with Web3Auth** in the extension or web app
-2. Pick your provider (Google / Twitter / Discord / email magic link)
-3. Web3Auth handles OAuth — no keys, no custody
-4. SubBot verifies your identity token via `https://api-auth.web3auth.io/.well-known/jwks.json`
-5. Your subscription data is isolated to your verified identity
-
----
-
-## What the agent does in practice
-
-### Morning (9:00am daily — no user interaction)
-- Renewal alert daemon scans all users for subscriptions due in 3 or 1 day
-- Digest agent at 9:05am: LLM reviews each user's portfolio, sends a personalized briefing only if something actionable is found
-- Every alert and digest that triggers a recommendation is logged on Celo
-
-### Weekly (Monday 8:00am — no user interaction)
-- Full LLM portfolio re-analysis for all users
-- Overlaps, forgotten services, quick wins, negotiation candidates — all reasoned by the model, not calculated by formulas
-- Results pushed to user via Telegram and synced to the web dashboard
-
-### On demand (user triggers)
-- Gmail IMAP scan — auto-detects subscriptions across 50+ known billing patterns
-- `/audit` — LLM produces a full personalized report
-- `/negotiate [service]` — LLM generates a personalized retention email using the user's real leverage (tenure, competitor services, health score, expected discount)
-- CSV export — full report delivered to Telegram
+Works natively with **MiniPay** (Opera Mini's built-in wallet). Multi-currency support (NGN, GBP, EUR, KES, GHS, ZAR → USD) — built for the users most fintech tools ignore.
 
 ---
 
@@ -186,19 +120,15 @@ This means GoodDollar users who already have a GoodDollar identity can sign into
                     │                                   │
                     │   SubBotVault.sol                 │
                     │   — G$ UBI balance (daily claims) │
-                    │   — cUSD → Aave v3 yield (alt)    │
+                    │   — cUSD → Aave v3 yield          │
                     │   — agent spends from yield only  │
                     │                                   │
                     │   SubBotLog.sol                   │
                     │   — immutable decision log        │
                     │   — savings tracker               │
-                    │                                   │
-                    │   GoodDollar G$ Token             │
-                    │   — daily UBI distribution        │
-                    │   — micro-payment for operations  │
                     └─────────────────────────────────┘
 
-GoodDollar / Telegram user
+User (Telegram / Web / MiniPay)
       │
       ▼
 Hermes Gateway  (Hermes-4-70B · Nous inference API)
@@ -208,22 +138,22 @@ Hermes Gateway  (Hermes-4-70B · Nous inference API)
       ├── gmail-scanner.py    ← IMAP scan, 50+ services
       ├── export.py           ← CSV → Telegram
       ├── currency.py         ← Live FX, 6hr cache
-      └── sync-to-web.py      ← Push to Railway
+      └── sync-to-web.py      ← Push to API bridge
            │
            ▼
-      API Bridge  (Node.js · Railway)
+      API Bridge  (Node.js · subbotai.xyz)
            │
            ├── POST /auth/verify-web3auth  ← JWKS JWT verification
            ├── POST /log-decision          ← writes to Celo contract
-           ├── POST /audit                 ← triggers llm-analyze.py
-           ├── GET  /analysis              ← returns LLM results
-           ├── POST /negotiate             ← triggers negotiate.py
+           ├── POST /audit                 ← triggers LLM analysis
+           ├── POST /delete-sub            ← remove subscription
+           ├── POST /update-sub            ← edit subscription
            ├── GET  /balance               ← G$ / cUSD balance via RPC
-           └── serves public/              ← web dashboard
+           └── serves public/              ← PWA dashboard
                 │
                 ▼
            Web Dashboard + Chrome Extension
-           (Vanilla JS · Tailwind · Railway · MiniPay-ready)
+           (Vanilla JS · Tailwind · PWA · MiniPay-ready)
 ```
 
 ---
@@ -232,106 +162,62 @@ Hermes Gateway  (Hermes-4-70B · Nous inference API)
 
 **SubBotVault** — [`0x48720eeDdCc1Cf3B2C613Dc093869a2332841e62`](https://celoscan.io/address/0x48720eeDdCc1Cf3B2C613Dc093869a2332841e62)
 
-The yield vault. cUSD deposits are immediately supplied to Aave v3 on Celo. G$ UBI deposits accrue as a spendable balance. The agent calls `spendCredits()` for every operation — if the balance is insufficient, the call reverts. Principal is locked; no code path can spend it.
+The yield vault. cUSD deposits go into Aave v3 on Celo. G$ UBI deposits accrue as a spendable balance. The agent calls `spendCredits()` for every operation — if the balance is insufficient, the call reverts. No code path can touch principal.
 
-- **Aave v3 Pool (Celo)** — [`0x3E59A31363E2ad014dcbc521c4a0d5757d9f3402`](https://celoscan.io/address/0x3E59A31363E2ad014dcbc521c4a0d5757d9f3402)
-- **cUSD** — [`0x765DE816845861e75A25fCA122bb6898B8B1282a`](https://celoscan.io/address/0x765DE816845861e75A25fCA122bb6898B8B1282a)
-- **G$ (GoodDollar)** — [`0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c14`](https://celoscan.io/address/0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c14)
-- **aUSDm (Aave receipt token)** — [`0xBba98352628B0B0c4b40583F593fFCb630935a45`](https://celoscan.io/address/0xBba98352628B0B0c4b40583F593fFCb630935a45)
-- **First deposit tx** — [`0xabfe727070c4b54bb58077dd41f0c7a3836ae5e444dca57141882d8810568086`](https://celoscan.io/tx/0xabfe727070c4b54bb58077dd41f0c7a3836ae5e444dca57141882d8810568086)
+- Aave v3 Pool (Celo) — [`0x3E59A31363E2ad014dcbc521c4a0d5757d9f3402`](https://celoscan.io/address/0x3E59A31363E2ad014dcbc521c4a0d5757d9f3402)
+- cUSD — [`0x765DE816845861e75A25fCA122bb6898B8B1282a`](https://celoscan.io/address/0x765DE816845861e75A25fCA122bb6898B8B1282a)
+- G$ (GoodDollar) — [`0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c14`](https://celoscan.io/address/0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c14)
 
 **SubBotLog** — [`0x5bc06976e5b46fd624195EFdD0bFC45a73569003`](https://celoscan.io/address/0x5bc06976e5b46fd624195EFdD0bFC45a73569003)
 
-Immutable decision audit trail. Every LLM recommendation creates a transaction with a privacy-preserving user hash, action type, and estimated savings. Running total of savings identified is publicly readable on-chain.
+Immutable decision audit trail. Every LLM recommendation creates a transaction with a privacy-preserving user hash, action type, and estimated savings.
 
 ---
 
-## Quick demo (3 paths)
+## Quick start
 
-**Option A — Web app (2 minutes, no setup):**
-1. Open [the web app](https://portal-subscription-manager-production.up.railway.app)
-2. Click **Login with Web3Auth** — sign in with Google or email
-3. Add a subscription manually with **+**
-4. Watch Dashboard, Audit, and Alerts update in real time
+**Web app (no setup):**
+1. Open [subbotai.xyz](https://subbotai.xyz)
+2. Sign in with Web3Auth (Google, email, or wallet)
+3. Add subscriptions with **+** or scan Gmail
+4. Dashboard, Audit, and Alerts update in real time
 
-**Option B — GoodDollar + Telegram flow:**
-1. Claim your daily G$ at [gooddollar.org](https://gooddollar.org) or in MiniPay
-2. Message [@SubmanagerAgentBot](https://t.me/SubmanagerAgentBot)
-3. Send `/myid` → bot replies with your Telegram ID
-4. Open the web app, enter your ID → your data loads into the dashboard
-5. Ask: `"audit my subscriptions"` or `"what am I paying for"`
-6. G$ micro-payments cover every operation automatically
-
-**Option C — Gmail scan (full power):**
-1. Tell the bot you want to scan your Gmail
-2. Get a Google App Password at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
-3. Share your email + App Password with the bot
-4. Agent scans 120 days of email, auto-detects all subscriptions, syncs to web dashboard
+**Telegram:**
+1. Message [@SubmanagerAgentBot](https://t.me/SubmanagerAgentBot)
+2. `/scan` — scan Gmail for subscriptions
+3. `/audit` — LLM portfolio analysis
+4. `/negotiate Netflix` — generate retention email
 
 ---
 
 ## Running locally
-
-### Prerequisites
-- Python 3.9+
-- Node.js 18+
-- Telegram bot token ([@BotFather](https://t.me/BotFather))
-- Nous Research API key
-- Web3Auth client ID (for auth)
-
-### 1. Clone and install
 
 ```bash
 git clone https://github.com/Calebux/Portal-Subscription-manager
 cd Portal-Subscription-manager
 npm install
 pip install hermes-agent && hermes setup
-```
 
-### 2. Configure environment
-
-Create `~/.hermes/.env`:
-
-```env
+# Configure ~/.hermes/.env
 TELEGRAM_BOT_TOKEN=your_token
-OPENAI_API_KEY=your_nous_api_key
+OPENAI_API_KEY=your_nous_key
 OPENAI_BASE_URL=https://inference-api.nousresearch.com/v1
-GATEWAY_ALLOW_ALL_USERS=true
-```
 
-Create `.env` in project root:
-
-```env
-AGENT_PRIVATE_KEY=0x...          # wallet with CELO for gas
+# Configure .env
+AGENT_PRIVATE_KEY=0x...
 LOG_CONTRACT_ADDRESS=0x5bc06976e5b46fd624195EFdD0bFC45a73569003
-WEB3AUTH_CLIENT_ID=BCkzpmFTjh9pTHe7LGNlrg_jo22W7DNHGkkZSbgrQlOeSf7AzRZ1qdZXDRyxplEq5knOTiCjhH-uga6tpnASP1o
+VAULT_CONTRACT_ADDRESS=0x48720eeDdCc1Cf3B2C613Dc093869a2332841e62
+
+# Start
+node api-bridge.js        # Terminal 1 — API bridge
+hermes gateway run        # Terminal 2 — Telegram agent
 ```
 
-### 3. Deploy your own contracts (optional)
+### Deploy to VPS
 
 ```bash
-node compile-contract.js         # compiles SubBotLog.sol + SubBotVault.sol
-node deploy-contract.js          # deploys to Celo mainnet
-```
-
-### 4. Start the bridge and agent
-
-```bash
-cp *.py ~/.hermes/
-
-# Terminal 1 — API bridge
-node api-bridge.js
-
-# Terminal 2 — Telegram agent
-hermes gateway run
-```
-
-### 5. Install autonomous agents (macOS)
-
-```bash
-launchctl load ~/Library/LaunchAgents/com.subbot.alerts.plist
-launchctl load ~/Library/LaunchAgents/com.subbot.digest.plist
-launchctl load ~/Library/LaunchAgents/com.subbot.analyze.plist
+scp deploy-vps.sh root@your-server:~/
+ssh root@your-server "bash ~/deploy-vps.sh"
 ```
 
 ---
@@ -340,18 +226,18 @@ launchctl load ~/Library/LaunchAgents/com.subbot.analyze.plist
 
 | File | What it does |
 |------|-------------|
-| `agent-digest.py` | **Autonomous daily agent** — LLM reviews all users, sends briefings without being asked |
-| `llm-analyze.py` | **LLM portfolio reasoning** — contextual judgment over all subscriptions |
-| `negotiate.py` | **LLM negotiation strategy** — personalized retention emails with real user leverage |
-| `contracts/SubBotLog.sol` | **On-chain decision log** — immutable audit trail on Celo |
-| `contracts/SubBotVault.sol` | **G$/cUSD vault** — Aave yield + G$ UBI balance for agent operations |
-| `extension/web3auth-login.html` | **Web3Auth login tab** — Google/Twitter/Discord/email login for the Chrome extension |
-| `subscription-alerts.py` | Renewal daemon — Telegram alert 3 and 1 day before charges |
-| `gmail-scanner.py` | IMAP scanner — detects subscriptions across 50+ billing patterns |
-| `api-bridge.js` | Node.js bridge — JWT verification, Celo logging, Aave vault ops, web dashboard |
-| `export.py` | CSV generation + Telegram delivery |
-| `currency.py` | Live FX rates (NGN, GBP, EUR → USD), 6-hour cache |
-| `public/` | Web dashboard — Material Design 3, MiniPay-ready, real-time sync via Railway |
+| `agent-digest.py` | Autonomous daily agent — LLM reviews all users, sends briefings |
+| `llm-analyze.py` | LLM portfolio reasoning — contextual judgment over subscriptions |
+| `negotiate.py` | LLM negotiation emails with real user leverage |
+| `contracts/SubBotLog.sol` | On-chain decision audit trail (Celo) |
+| `contracts/SubBotVault.sol` | G$/cUSD vault with Aave v3 yield |
+| `contracts/SubBotGoodDollar.sol` | GoodDollar claim adapter |
+| `subscription-alerts.py` | Renewal daemon — alerts 3 and 1 day before charges |
+| `gmail-scanner.py` | IMAP scanner — 50+ billing patterns |
+| `api-bridge.js` | Node.js bridge — auth, Celo logging, vault ops, serves PWA |
+| `public/` | Web dashboard — PWA, light/dark theme, Web3Auth, MiniPay-ready |
+| `extension/` | Chrome extension — same UI, offline-capable |
+| `deploy-vps.sh` | One-command VPS deployment with systemd |
 
 ---
 
