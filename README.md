@@ -6,8 +6,6 @@
 - Web: [subbotai.xyz](https://subbotai.xyz)
 - Telegram: [@SubmanagerAgentBot](https://t.me/SubmanagerAgentBot)
 - SubBotCredits: [`0x4CB0d47BA5F40A5ffDc9BfF6D7810D9a887853B1`](https://celoscan.io/address/0x4CB0d47BA5F40A5ffDc9BfF6D7810D9a887853B1)
-- SubBotLog: [`0x5bc06976e5b46fd624195EFdD0bFC45a73569003`](https://celoscan.io/address/0x5bc06976e5b46fd624195EFdD0bFC45a73569003)
-- SubBotVault (legacy): [`0x48720eeDdCc1Cf3B2C613Dc093869a2332841e62`](https://celoscan.io/address/0x48720eeDdCc1Cf3B2C613Dc093869a2332841e62)
 
 ---
 
@@ -168,13 +166,6 @@ G$ credit system. Users deposit GoodDollar tokens, agent spends them for operati
 - G$ (GoodDollar) — [`0x62B8b11039fcfe5Ab0c56E502B1c372a3d2a9C14`](https://celoscan.io/address/0x62B8b11039fcfe5Ab0c56E502B1c372a3d2a9C14)
 - Agent wallet — [`0xfEFAC90c384f6c09004F485b9fa894D9dA910898`](https://celoscan.io/address/0xfEFAC90c384f6c09004F485b9fa894D9dA910898)
 
-**SubBotLog** — [`0x5bc06976e5b46fd624195EFdD0bFC45a73569003`](https://celoscan.io/address/0x5bc06976e5b46fd624195EFdD0bFC45a73569003)
-
-Immutable decision audit trail. Every LLM recommendation creates a transaction with a privacy-preserving user hash, action type, and estimated savings.
-
-**SubBotVault** (legacy) — [`0x48720eeDdCc1Cf3B2C613Dc093869a2332841e62`](https://celoscan.io/address/0x48720eeDdCc1Cf3B2C613Dc093869a2332841e62)
-
-Previous yield-bearing vault (Aave v3 integration). Superseded by SubBotCredits for simpler G$ operations.
 
 ---
 
