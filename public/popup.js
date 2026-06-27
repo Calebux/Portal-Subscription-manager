@@ -72,12 +72,14 @@ const SEL_BALANCE_OF = '0x70a08231'; // balanceOf(address)
 
 function padAddr(addr) { return '000000000000000000000000' + addr.slice(2).toLowerCase(); }
 
-async function ethCall(to, data) {
+async function ethCall(to, data, from) {
+  const params = from ? { from, to, data } : { to, data };
   const r = await fetch('https://forno.celo.org', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to, data }, 'latest'] }),
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [params, 'latest'] }),
   });
   const j = await r.json();
+  if (j.error) return null;
   return j.result;
 }
 
@@ -166,16 +168,24 @@ async function checkGDStatus(address) {
 
     // Check entitlement using the verified address
     const entResult = await ethCall(GD_UBISCHEME, SEL_CHECK_ENTITLEMENT + padAddr(activeAddr));
-    const entitlement = entResult ? BigInt(entResult) : 0n;
 
-    if (entitlement > 0n) {
-      const amount = (Number(entitlement) / 1e18).toFixed(2);
-      claimableEl.textContent = amount + ' G$';
-      statusEl.textContent = 'You have G$ to claim!';
-      claimBtn?.classList.remove('hidden');
-    } else {
+    if (entResult === null) {
+      // Contract reverted — new user needs to claim from GoodWallet first
       claimableEl.textContent = '';
-      statusEl.textContent = 'Already claimed today. Come back tomorrow!';
+      statusEl.innerHTML = 'First claim must be done on GoodWallet.';
+      claimBtn?.classList.remove('hidden');
+      claimBtn.innerHTML = '<i class="fa-solid fa-arrow-up-right-from-square text-sm"></i> Open GoodWallet';
+    } else {
+      const entitlement = entResult ? BigInt(entResult) : 0n;
+      if (entitlement > 0n) {
+        const amount = (Number(entitlement) / 1e18).toFixed(2);
+        claimableEl.textContent = amount + ' G$';
+        statusEl.textContent = 'You have G$ to claim!';
+        claimBtn?.classList.remove('hidden');
+      } else {
+        claimableEl.textContent = '';
+        statusEl.textContent = 'Already claimed today. Come back tomorrow!';
+      }
     }
   } catch (err) {
     console.error('GD check error:', err);
