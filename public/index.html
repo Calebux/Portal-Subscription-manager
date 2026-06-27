@@ -277,84 +277,60 @@
 
 <!-- SCREEN: CREDITS -->
 <div id="screen-credits" class="screen">
-  <div class="screen-scroll pt-[52px] pb-[56px] px-4 space-y-4">
-    <div id="vault-card" class="relative w-full rounded-2xl overflow-hidden gold-border p-5 flex flex-col gap-3 amber-glow bg-gradient-to-br from-slate-900 to-slate-950 text-white mt-3 shadow-xl">
-      <div class="flex justify-between items-center">
+  <div class="screen-scroll pt-[52px] pb-[56px] px-4 space-y-5">
+    <!-- Balance card -->
+    <div class="relative w-full rounded-2xl overflow-hidden gold-border p-5 flex flex-col justify-between amber-glow bg-gradient-to-br from-panel to-app border border-edge mt-3 shadow-xl" style="min-height:120px;">
+      <div class="flex justify-between items-start">
         <div class="flex items-center gap-2">
           <div class="w-8 h-8 rounded-full bg-amber-400/20 flex items-center justify-center">
-            <i class="fa-solid fa-vault text-amber-400 text-base"></i>
+            <i class="fa-solid fa-coins text-amber-500 text-base"></i>
           </div>
-          <span class="text-xs font-mono text-amber-400 uppercase tracking-widest font-bold">SubBot Vault · DeFi Engine</span>
-        </div>
-        <span id="vault-status-badge" class="hidden text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">● Active</span>
-      </div>
-      <div class="grid grid-cols-3 gap-2 mt-1">
-        <div class="bg-white/5 rounded-xl p-3 text-center border border-white/10">
-          <p class="text-[9px] text-slate-400 uppercase tracking-widest font-bold mb-1">Principal</p>
-          <p id="vault-principal" class="text-base font-bold font-mono text-white leading-none">—</p>
-          <p class="text-[9px] text-amber-400 font-semibold mt-1.5">Locked G$</p>
-        </div>
-        <div class="bg-white/5 rounded-xl p-3 text-center border border-white/10">
-          <p class="text-[9px] text-slate-400 uppercase tracking-widest font-bold mb-1">Yield Earned</p>
-          <p id="vault-yield" class="text-base font-bold font-mono text-emerald-400 leading-none">—</p>
-          <p class="text-[9px] text-slate-300 mt-1.5">10% APY</p>
-        </div>
-        <div class="bg-white/5 rounded-xl p-3 text-center border border-white/10">
-          <p class="text-[9px] text-slate-400 uppercase tracking-widest font-bold mb-1">Credits</p>
-          <p id="vault-credits" class="text-base font-bold font-mono text-cyan-400 leading-none">—</p>
-          <p class="text-[9px] text-slate-300 mt-1.5">Spendable</p>
+          <span class="text-xs font-mono text-amber-500 uppercase tracking-widest font-bold">Celo Mainnet · G$</span>
         </div>
       </div>
-      <p id="vault-tagline" class="text-[11px] text-slate-300 text-center leading-snug font-medium">
-        Deposit GoodDollar (G$) — Aave v3 interest pays for all AI bot runs forever.
-      </p>
+      <div class="mt-3">
+        <span class="text-[10px] text-muted uppercase tracking-widest font-bold">Your Balance</span>
+        <div class="flex items-baseline gap-2"><h1 id="credits-balance" class="text-3xl font-bold font-mono text-main leading-none">0.00</h1><span class="text-amber-500 font-mono font-bold">G$</span></div>
+      </div>
+      <p class="text-[10px] text-muted mt-2">Managed by SubBot · syncs automatically</p>
     </div>
 
+    <!-- Claim G$ -->
     <section>
-      <div class="flex items-center gap-2 mb-2.5"><span class="w-1.5 h-3 bg-amber-500 rounded-full"></span><h2 class="text-xs font-bold uppercase tracking-widest text-muted">Vault Deposit Address</h2></div>
-      <div class="bg-panel border border-edge rounded-2xl p-4 space-y-3">
-        <p class="text-xs text-muted leading-snug">
-          Send G$ tokens to the vault contract on Celo, then tap refresh below.
-        </p>
-        <div class="flex items-center gap-2 p-3 bg-field border border-edge rounded-xl">
-          <code id="vault-addr" class="text-xs font-mono text-primary flex-1 truncate font-bold">Loading…</code>
-          <button data-action="copyVaultAddr" class="text-muted hover:text-main p-1.5" title="Copy"><i class="fa-regular fa-copy text-base"></i></button>
+      <div class="flex items-center gap-2 mb-3"><span class="w-1 h-3 bg-amber-500 rounded-full"></span><h2 class="text-xs font-bold uppercase tracking-widest text-muted">Claim G$</h2></div>
+      <div class="rounded-2xl p-4 space-y-3 bg-panel border border-edge">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2"><i class="fa-solid fa-leaf text-emerald-500 text-base"></i><span class="text-xs font-bold uppercase tracking-wider text-emerald-500">GoodDollar UBI</span></div>
+          <span id="gd-claimable" class="text-sm font-mono font-bold text-emerald-500"></span>
         </div>
-        <button data-action="refreshData" class="w-full py-3 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold flex items-center justify-center gap-2 transition-colors">
-          <i class="fa-solid fa-rotate-right text-sm"></i> Refresh Balance
+        <div id="gd-status" class="text-xs text-muted">Checking eligibility…</div>
+        <button id="gd-claim-btn" data-action="claimGD" class="hidden w-full py-3 rounded-xl text-xs font-bold uppercase tracking-wider active:scale-95 transition-transform bg-emerald-500 hover:bg-emerald-600 text-white shadow-md flex items-center justify-center gap-2">
+          <i class="fa-solid fa-hand-holding-dollar text-sm"></i> Claim G$
         </button>
+        <a id="gd-verify-link" href="https://goodwallet.xyz/en" target="_blank" rel="noopener" class="hidden text-xs font-bold text-emerald-500 hover:underline inline-flex items-center gap-1">Get Verified <i class="fa-solid fa-arrow-right text-[10px]"></i></a>
       </div>
     </section>
 
+    <!-- Cost per action -->
     <section>
-      <div class="flex items-center gap-2 mb-2.5"><span class="w-1.5 h-3 bg-emerald-500 rounded-full"></span><h2 class="text-xs font-bold uppercase tracking-widest text-muted">GoodDollar UBI</h2></div>
-      <div class="bg-panel border border-edge rounded-2xl p-4 space-y-3">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-heart text-emerald-500 text-lg"></i></div>
-          <div><p class="text-sm font-bold text-main">Free Universal Basic Income</p><p class="text-xs text-muted">Claim free G$ daily from GoodDollar pool</p></div>
+      <div class="flex items-center gap-2 mb-3"><span class="w-1 h-3 bg-primary rounded-full"></span><h2 class="text-xs font-bold uppercase tracking-widest text-muted">Cost Per Action</h2></div>
+      <div class="bg-panel rounded-2xl overflow-hidden border border-edge">
+        <div class="flex justify-between px-4 py-2.5 border-b border-edge font-bold text-[10px] uppercase text-muted tracking-wider"><span>Action</span><span>G$</span></div>
+        <div class="divide-y divide-edge">
+          <div class="flex justify-between px-4 py-2.5"><span class="text-xs text-main font-medium">Gmail Scan</span><span class="text-xs font-mono font-bold text-amber-500">0.10</span></div>
+          <div class="flex justify-between px-4 py-2.5"><span class="text-xs text-main font-medium">AI Audit</span><span class="text-xs font-mono font-bold text-amber-500">0.05</span></div>
+          <div class="flex justify-between px-4 py-2.5"><span class="text-xs text-main font-medium">Export CSV</span><span class="text-xs font-mono font-bold text-amber-500">0.05</span></div>
+          <div class="flex justify-between px-4 py-2.5"><span class="text-xs text-main font-medium">Negotiation Email</span><span class="text-xs font-mono font-bold text-amber-500">0.10</span></div>
+          <div class="flex justify-between px-4 py-2.5"><span class="text-xs text-main font-medium">View Dashboard</span><span class="text-xs font-mono font-bold text-emerald-500">Free</span></div>
         </div>
-        <p id="gd-claimable" class="text-xs text-emerald-500 font-mono font-bold text-center"></p>
-        <div id="gd-status" class="text-xs text-muted text-center"></div>
-        <button id="gd-claim-btn" data-action="claimGD" class="w-full py-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center justify-center gap-2 transition-colors border border-emerald-500/20 active:scale-95 transition-transform">
-          <i class="fa-solid fa-hand-holding-dollar text-sm"></i> Claim G$ On-Chain
-        </button>
-        <a href="https://wallet.gooddollar.org" target="_blank" class="w-full py-2.5 rounded-xl text-emerald-600 dark:text-emerald-400 text-[10px] font-bold flex items-center justify-center gap-1 hover:underline">
-          <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i> Open GoodDollar Wallet
-        </a>
       </div>
     </section>
 
-    <section>
-      <div class="flex items-center gap-2 mb-2.5"><span class="w-1.5 h-3 bg-primary rounded-full"></span><h2 class="text-xs font-bold uppercase tracking-widest text-muted">Credit Balance</h2></div>
-      <div class="bg-panel border border-edge rounded-2xl p-5 text-center">
-        <p class="text-3xl font-bold font-mono text-primary"><span id="credits-balance">0.00</span> <span class="text-sm text-muted">G$</span></p>
-        <p class="text-[10px] text-muted mt-1.5">Available for AI bot operations</p>
-      </div>
-    </section>
-
+    <!-- Usage history -->
     <section class="pb-4">
-      <div class="flex items-center gap-2 mb-2.5"><span class="w-1.5 h-3 bg-sky-500 rounded-full"></span><h2 class="text-xs font-bold uppercase tracking-widest text-muted">Transaction History</h2></div>
-      <div id="tx-history" class="space-y-2"><p class="text-xs text-muted text-center py-3 bg-panel rounded-xl border border-edge">No transactions yet.</p></div>
+      <div class="flex items-center gap-2 mb-3"><span class="w-1 h-3 bg-sky-500 rounded-full"></span><h2 class="text-xs font-bold uppercase tracking-widest text-muted">Usage History</h2></div>
+      <div id="tx-history"><p class="text-xs text-muted text-center py-3 bg-panel rounded-xl border border-edge">No transactions yet.</p></div>
+      <p class="text-[10px] text-muted text-center mt-3 font-semibold">Running on Celo · Fees &lt; $0.001</p>
     </section>
   </div>
 </div>

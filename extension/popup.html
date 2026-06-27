@@ -292,45 +292,62 @@
 
 <!-- SCREEN: CREDITS -->
 <div id="screen-credits" class="screen">
-  <div class="screen-scroll pt-[52px] pb-[56px] px-4 space-y-3.5">
-    <div id="vault-card" class="relative w-full rounded-2xl overflow-hidden gold-border p-4 flex flex-col gap-2.5 amber-glow bg-gradient-to-br from-slate-900 to-slate-950 text-white mt-3 shadow-xl">
-      <div class="flex justify-between items-center">
-        <div class="flex items-center gap-1.5">
+  <div class="screen-scroll pt-[52px] pb-[56px] px-4 space-y-5">
+    <!-- Balance card -->
+    <div class="relative w-full rounded-2xl overflow-hidden gold-border p-4 flex flex-col justify-between amber-glow bg-gradient-to-br from-panel to-app border border-edge mt-2 shadow-xl" style="min-height:120px;">
+      <div class="flex justify-between items-start">
+        <div class="flex items-center gap-2">
           <div class="w-7 h-7 rounded-full bg-amber-400/20 flex items-center justify-center">
-            <i class="fa-solid fa-vault text-amber-400 text-sm"></i>
+            <i class="fa-solid fa-coins text-amber-500 text-sm"></i>
           </div>
-          <span class="text-[11px] font-mono text-amber-400 uppercase tracking-widest font-bold">SubBot Vault · cUSD</span>
+          <span class="text-[11px] font-mono text-amber-500 uppercase tracking-widest font-bold">Celo Mainnet · cUSD</span>
         </div>
       </div>
-      <div class="grid grid-cols-3 gap-1.5 mt-1">
-        <div class="bg-white/5 rounded-xl p-2.5 text-center border border-white/10">
-          <p class="text-[8px] text-slate-400 uppercase tracking-widest font-bold mb-1">Principal</p>
-          <p id="vault-principal" class="text-sm font-bold font-mono text-white leading-none">—</p>
-          <p class="text-[8px] text-amber-400 font-semibold mt-1">Locked cUSD</p>
-        </div>
-        <div class="bg-white/5 rounded-xl p-2.5 text-center border border-white/10">
-          <p class="text-[8px] text-slate-400 uppercase tracking-widest font-bold mb-1">Yield Earned</p>
-          <p id="vault-yield" class="text-sm font-bold font-mono text-emerald-400 leading-none">—</p>
-          <p class="text-[8px] text-slate-300 mt-1">10% APY</p>
-        </div>
-        <div class="bg-white/5 rounded-xl p-2.5 text-center border border-white/10">
-          <p class="text-[8px] text-slate-400 uppercase tracking-widest font-bold mb-1">Credits</p>
-          <p id="vault-credits" class="text-sm font-bold font-mono text-cyan-400 leading-none">—</p>
-          <p class="text-[8px] text-slate-300 mt-1">Spendable</p>
-        </div>
+      <div class="mt-3">
+        <span class="text-[9px] text-muted uppercase tracking-widest font-bold">Your Balance</span>
+        <div class="flex items-baseline gap-2"><h1 id="credits-balance" class="text-2xl font-bold font-mono text-main leading-none">0.00</h1><span class="text-amber-500 font-mono font-bold">cUSD</span></div>
       </div>
-      <p id="vault-tagline" class="text-[9px] text-slate-300 text-center leading-snug font-medium">
-        Deposit cUSD — Aave interest covers all bot runs forever. Principal untouched.
-      </p>
+      <p class="text-[9px] text-muted mt-2">Managed by your Telegram bot · syncs automatically</p>
     </div>
 
+    <!-- How to top up -->
     <section>
-      <div class="flex items-center gap-2 mb-2"><span class="w-1 h-2.5 bg-amber-500 rounded-full"></span><h2 class="text-[10px] font-bold uppercase tracking-widest text-muted">Project Wallet QR</h2></div>
-      <div class="bg-panel border border-edge rounded-2xl p-4 flex flex-col items-center">
-        <canvas id="credits-qr" width="160" height="160" class="rounded-xl border border-edge mb-2.5"></canvas>
-        <code class="project-addr-short text-[10px] font-mono text-primary font-bold">Loading…</code>
-        <button data-action="copyProjectAddr" class="mt-2 text-[11px] text-primary font-bold hover:underline flex items-center gap-1"><i class="fa-regular fa-copy text-xs"></i> Copy Address</button>
+      <div class="flex items-center gap-2 mb-2.5"><span class="w-1 h-2.5 bg-amber-500 rounded-full"></span><h2 class="text-[10px] font-bold uppercase tracking-widest text-muted">How to Top Up</h2></div>
+      <div class="glass border border-edge rounded-2xl p-4 flex flex-col items-center gap-3">
+        <div class="bg-white p-2 rounded-xl shadow-md"><canvas id="credits-qr" width="130" height="130"></canvas></div>
+        <div class="w-full space-y-2">
+          <p class="text-[10px] text-muted text-center leading-snug">Send any amount of <span class="text-main font-semibold">cUSD</span> from <span class="text-primary">MiniPay</span> or <span class="text-primary">Valora</span> to this address, then confirm with your bot.</p>
+          <div class="flex items-center gap-2 p-2.5 bg-field border border-edge rounded-xl">
+            <code id="qr-addr" class="text-[10px] font-mono text-primary flex-1 truncate font-bold">—</code>
+            <button data-action="copyProjectAddr" class="text-muted hover:text-primary flex-shrink-0 p-1"><i class="fa-regular fa-copy text-sm"></i></button>
+          </div>
+          <button data-action="openBot" class="w-full py-2 rounded-xl bg-primary/10 text-primary text-xs font-bold flex items-center justify-center gap-1.5 active:scale-95 transition-transform">
+            <i class="fa-brands fa-telegram text-sm"></i> Open Bot to Confirm
+          </button>
+        </div>
       </div>
+    </section>
+
+    <!-- Cost per action -->
+    <section>
+      <div class="flex items-center gap-2 mb-2.5"><span class="w-1 h-2.5 bg-primary rounded-full"></span><h2 class="text-[10px] font-bold uppercase tracking-widest text-muted">Cost Per Action</h2></div>
+      <div class="bg-panel rounded-xl overflow-hidden border border-edge">
+        <div class="flex justify-between px-3 py-2 border-b border-edge font-bold text-[9px] uppercase text-muted tracking-wider"><span>Action</span><span>cUSD</span></div>
+        <div class="divide-y divide-edge">
+          <div class="flex justify-between px-3 py-2"><span class="text-xs text-main font-medium">Gmail Scan</span><span class="text-xs font-mono font-bold text-amber-500">0.10</span></div>
+          <div class="flex justify-between px-3 py-2"><span class="text-xs text-main font-medium">AI Audit</span><span class="text-xs font-mono font-bold text-amber-500">0.05</span></div>
+          <div class="flex justify-between px-3 py-2"><span class="text-xs text-main font-medium">Export CSV</span><span class="text-xs font-mono font-bold text-amber-500">0.05</span></div>
+          <div class="flex justify-between px-3 py-2"><span class="text-xs text-main font-medium">Negotiation Email</span><span class="text-xs font-mono font-bold text-amber-500">0.10</span></div>
+          <div class="flex justify-between px-3 py-2"><span class="text-xs text-main font-medium">View Dashboard</span><span class="text-xs font-mono font-bold text-emerald-500">Free</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Usage history -->
+    <section class="pb-4">
+      <div class="flex items-center gap-2 mb-2.5"><span class="w-1 h-2.5 bg-sky-500 rounded-full"></span><h2 class="text-[10px] font-bold uppercase tracking-widest text-muted">Usage History</h2></div>
+      <div id="tx-history"><p class="text-xs text-muted text-center py-3 bg-panel rounded-xl border border-edge">No transactions yet.</p></div>
+      <p class="text-[9px] text-muted text-center mt-2.5 font-semibold">Running on Celo · Fees &lt; $0.001</p>
     </section>
   </div>
 </div>
