@@ -168,10 +168,13 @@ async function payForAction(action) {
       } catch (_) {}
     }
 
-    if (!provider && web3authInstance?.provider) {
-      provider = web3authInstance.provider;
-      const accounts = await provider.request({ method: 'eth_accounts' });
-      from = accounts?.[0];
+    if (!provider) {
+      if (!web3authInstance) { try { await getWeb3Auth(); } catch (_) {} }
+      if (web3authInstance?.connected && web3authInstance.provider) {
+        provider = web3authInstance.provider;
+        const accounts = await provider.request({ method: 'eth_accounts' });
+        from = accounts?.[0];
+      }
     }
 
     if (!provider || !from) { toast('No wallet available'); return false; }
@@ -244,7 +247,11 @@ async function payForAction(action) {
 // Get the wallet provider and address (Web3Auth or injected)
 async function getGDProvider() {
   let provider = null, from = null;
-  if (web3authInstance?.provider) {
+  // Ensure Web3Auth is initialized (reconnects session after page refresh)
+  if (!web3authInstance) {
+    try { await getWeb3Auth(); } catch (_) {}
+  }
+  if (web3authInstance?.connected && web3authInstance.provider) {
     provider = web3authInstance.provider;
     const accounts = await provider.request({ method: 'eth_accounts' });
     from = accounts?.[0];
