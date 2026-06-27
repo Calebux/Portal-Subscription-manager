@@ -128,14 +128,17 @@ async function checkGDStatus(address) {
     }
 
     if (!isWhitelisted) {
-      statusEl.innerHTML = window.ethereum
-        ? 'Verified? Tap below to link your GoodDollar wallet. <button id="gd-check-injected" class="text-emerald-500 underline text-xs font-bold">Connect GoodDollar Wallet</button>'
-        : 'Verify on GoodWallet, then reopen SubBot.';
+      statusEl.innerHTML = `<span class="block mb-2">Wallet not verified with GoodDollar.</span>` +
+        (window.ethereum ? `<button id="gd-check-injected" class="text-emerald-500 underline text-xs font-bold block mb-1.5">Connect GoodDollar Wallet</button>` : '') +
+        `<span class="text-[10px] text-muted block mb-1">Or paste your GoodDollar wallet address:</span>` +
+        `<div class="flex gap-1.5 mt-1"><input id="gd-manual-addr" type="text" placeholder="0x..." class="flex-1 bg-field border border-edge rounded-lg py-1.5 px-2.5 text-[10px] font-mono text-main"/>` +
+        `<button id="gd-link-manual" class="px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-[10px] font-bold active:scale-95">Link</button></div>`;
       verifyLink?.classList.remove('hidden');
       verifyLink?.classList.add('inline-flex');
       if (document.getElementById('gd-check-injected')) {
         document.getElementById('gd-check-injected').addEventListener('click', connectGDWallet);
       }
+      document.getElementById('gd-link-manual')?.addEventListener('click', linkManualGDAddress);
       return;
     }
 
@@ -234,6 +237,24 @@ async function connectGDWallet() {
     }
   } catch (err) {
     toast('Could not connect wallet');
+  }
+}
+
+async function linkManualGDAddress() {
+  const input = document.getElementById('gd-manual-addr');
+  const addr = input?.value?.trim();
+  if (!addr || !/^0x[0-9a-fA-F]{40}$/.test(addr)) { toast('Enter a valid wallet address'); return; }
+  try {
+    const wl = await ethCall(GD_IDENTITY, SEL_IS_WHITELISTED + padAddr(addr));
+    if (wl && BigInt(wl) === 1n) {
+      localStorage.setItem('gd-verified-addr', addr);
+      toast('GoodDollar identity linked!');
+      checkGDStatus(addr);
+    } else {
+      toast('This address is not GoodDollar verified');
+    }
+  } catch (_) {
+    toast('Could not verify address');
   }
 }
 
