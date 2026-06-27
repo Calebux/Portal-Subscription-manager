@@ -66,7 +66,8 @@ const GD_UBISCHEME  = '0x43d72Ff17701B2DA814620735C39C620Ce0ea4A1';
 const GD_TOKEN      = '0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A';
 const GD_FAUCET     = '0x4F93Fa058b03953C851eFaA2e4FC5C34afDFAb84';
 const GD_IDENTITY_URL = 'https://goodid.gooddollar.org';
-const GD_FV_MSG     = 'Sign this message to request verifying your account <account> and to create your own secret unique identifier for your anonymized record. You can use this identifier in the future to delete this anonymized record. WARNING: do not sign this message unless you trust the website/application requesting this signature.';
+const GD_FV_MSG     = `Sign this message to request verifying your account <account> and to create your own secret unique identifier for your anonymized record.\nYou can use this identifier in the future to delete this anonymized record.\nWARNING: do not sign this message unless you trust the website/application requesting this signature.`;
+const GD_FV_LOGIN_MSG = `Sign this message to login into GoodDollar Unique Identity service.\nWARNING: do not sign this message unless you trust the website/application requesting this signature.\nnonce:`;
 // Function selectors (keccak256 first 4 bytes)
 const SEL_GET_WHITELISTED_ROOT = '0x2d0e9b46'; // getWhitelistedRoot(address)→address
 const SEL_CHECK_ENTITLEMENT    = '0x1a787f2e'; // checkEntitlement(address)→uint256
@@ -220,31 +221,44 @@ async function gdGetWhitelistedRoot(address) {
   return '0x' + result.slice(26); // extract address from 32-byte return
 }
 
-// Generate face verification link (SDK pattern: sign message + lz-compress params)
-async function gdGenerateFVLink(provider, address) {
-  const nonce = Math.floor(Date.now() / 1000).toString();
-  const message = GD_FV_MSG.replace('<account>', address);
+// Generate face verification link (SDK pattern: sign login + identifier messages, lz-compress)
+function toHexMsg(str) {
+  return '0x' + Array.from(new TextEncoder().encode(str)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
-  // Sign the FV message via the wallet
+async function gdGenerateFVLink(provider, address, firstName) {
+  const nonce = Math.floor(Date.now() / 1000).toString();
+
+  // 1. Sign login message (required by GoodID — "sg" param)
+  const loginMsg = GD_FV_LOGIN_MSG + nonce;
+  const loginSig = await provider.request({
+    method: 'personal_sign',
+    params: [toHexMsg(loginMsg), address],
+  });
+
+  // 2. Sign identifier message (required — "fvsig" param)
+  const fvMsg = GD_FV_MSG.replace('<account>', address);
   const fvSig = await provider.request({
     method: 'personal_sign',
-    params: [
-      '0x' + Array.from(new TextEncoder().encode(message)).map(b => b.toString(16).padStart(2, '0')).join(''),
-      address
-    ],
+    params: [toHexMsg(fvMsg), address],
   });
+
+  if (!fvSig || !loginSig) throw new Error('Missing signature for Face Verification.');
 
   const params = {
     account: address,
     nonce,
     fvsig: fvSig,
+    sg: loginSig,
+    firstname: firstName || 'User',
     chain: 42220,
-    rdu: window.location.href, // redirect back to SubBot after verification
+    rdu: window.location.href,
   };
 
-  // Compress params with lz-string (loaded via CDN)
   const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(params));
-  return `${GD_IDENTITY_URL}?lz=${compressed}`;
+  const url = new URL(GD_IDENTITY_URL);
+  url.searchParams.append('lz', compressed);
+  return url.toString();
 }
 
 // Check next claim time from UBI scheme
@@ -306,8 +320,14 @@ async function checkGDStatus(address) {
         try {
           const { provider, from } = await getGDProvider();
           if (!provider || !from) { toast('Connect wallet first'); return; }
-          toast('Sign the verification message…');
-          const fvUrl = await gdGenerateFVLink(provider, from);
+          // Get user name from Web3Auth if available
+          let firstName = 'User';
+          try {
+            const info = await web3authInstance?.getUserInfo();
+            firstName = info?.name?.split(' ')[0] || 'User';
+          } catch (_) {}
+          toast('Sign the verification messages…');
+          const fvUrl = await gdGenerateFVLink(provider, from, firstName);
           window.open(fvUrl, '_blank');
           toast('Complete verification, then return here');
         } catch (err) {
