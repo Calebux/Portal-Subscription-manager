@@ -169,12 +169,17 @@ async function checkGDStatus(address) {
     // Check entitlement using the verified address
     const entResult = await ethCall(GD_UBISCHEME, SEL_CHECK_ENTITLEMENT + padAddr(activeAddr));
 
+    // Also check G$ token balance
+    const balResult = await ethCall(GD_TOKEN, SEL_BALANCE_OF + padAddr(activeAddr));
+    const gdBalance = balResult ? Number(BigInt(balResult)) / 1e18 : 0;
+
     if (entResult === null) {
-      // Contract reverted — new user needs to claim from GoodWallet first
-      claimableEl.textContent = '';
-      statusEl.innerHTML = 'First claim must be done on GoodWallet.';
+      // Contract reverted — could be new user or unregistered on UBI scheme
+      claimableEl.textContent = gdBalance > 0 ? gdBalance.toFixed(2) + ' G$' : '';
+      statusEl.textContent = gdBalance > 0
+        ? 'Verified ✓ · Claim via GoodWallet'
+        : 'Verified ✓ · Claim your first G$ on GoodWallet';
       claimBtn?.classList.remove('hidden');
-      claimBtn.innerHTML = '<i class="fa-solid fa-arrow-up-right-from-square text-sm"></i> Open GoodWallet';
     } else {
       const entitlement = entResult ? BigInt(entResult) : 0n;
       if (entitlement > 0n) {
@@ -183,7 +188,7 @@ async function checkGDStatus(address) {
         statusEl.textContent = 'You have G$ to claim!';
         claimBtn?.classList.remove('hidden');
       } else {
-        claimableEl.textContent = '';
+        claimableEl.textContent = gdBalance > 0 ? gdBalance.toFixed(2) + ' G$' : '';
         statusEl.textContent = 'Already claimed today. Come back tomorrow!';
       }
     }
