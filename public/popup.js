@@ -128,13 +128,35 @@ async function checkGDStatus(address) {
     }
 
     if (!isWhitelisted) {
-      statusEl.innerHTML = `<span class="block mb-2">Wallet not verified with GoodDollar.</span>` +
-        (window.ethereum ? `<button id="gd-check-injected" class="text-emerald-500 underline text-xs font-bold block mb-1.5">Connect GoodDollar Wallet</button>` : '') +
-        `<span class="text-[10px] text-muted block mb-1">Or paste your GoodDollar wallet address:</span>` +
-        `<div class="flex gap-1.5 mt-1"><input id="gd-manual-addr" type="text" placeholder="0x..." class="flex-1 bg-field border border-edge rounded-lg py-1.5 px-2.5 text-[10px] font-mono text-main"/>` +
-        `<button id="gd-link-manual" class="px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-[10px] font-bold active:scale-95">Link</button></div>`;
-      verifyLink?.classList.remove('hidden');
-      verifyLink?.classList.add('inline-flex');
+      // Detect login type — social logins can never have their Web3Auth address verified
+      let w3aData = null;
+      try { w3aData = JSON.parse(localStorage.getItem('web3auth')); } catch (_) {}
+      const isSocialLogin = w3aData?.verifier && w3aData.verifier !== 'wallet';
+
+      if (isSocialLogin) {
+        // Social login: Web3Auth address will never match GD — guide them to link
+        statusEl.innerHTML =
+          `<span class="block mb-2 text-xs font-medium text-main">Link your GoodDollar wallet to claim G$</span>` +
+          `<span class="text-[10px] text-muted block mb-2">Your SubBot login uses a different address than GoodDollar. Paste your GoodWallet address below to link them.</span>` +
+          `<div class="flex gap-1.5"><input id="gd-manual-addr" type="text" placeholder="0x… (from GoodWallet → Profile)" class="flex-1 bg-field border border-edge rounded-lg py-1.5 px-2.5 text-[10px] font-mono text-main"/>` +
+          `<button id="gd-link-manual" class="px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-[10px] font-bold active:scale-95 whitespace-nowrap">Link</button></div>` +
+          `<span class="text-[10px] text-muted block mt-2">Don't have GoodDollar yet?</span>`;
+        verifyLink?.classList.remove('hidden');
+        verifyLink?.classList.add('inline-flex');
+        verifyLink.textContent = '';
+        verifyLink.innerHTML = 'Sign up on GoodWallet <i class="fa-solid fa-arrow-right text-[10px] ml-1"></i>';
+      } else {
+        // Wallet login (MetaMask etc): address should be verified but isn't
+        statusEl.innerHTML =
+          `<span class="block mb-2">This wallet is not GoodDollar verified.</span>` +
+          (window.ethereum ? `<button id="gd-check-injected" class="text-emerald-500 underline text-xs font-bold block mb-1.5">Try another connected wallet</button>` : '') +
+          `<span class="text-[10px] text-muted block mb-1">Or paste a different verified address:</span>` +
+          `<div class="flex gap-1.5 mt-1"><input id="gd-manual-addr" type="text" placeholder="0x..." class="flex-1 bg-field border border-edge rounded-lg py-1.5 px-2.5 text-[10px] font-mono text-main"/>` +
+          `<button id="gd-link-manual" class="px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-[10px] font-bold active:scale-95">Link</button></div>`;
+        verifyLink?.classList.remove('hidden');
+        verifyLink?.classList.add('inline-flex');
+      }
+
       if (document.getElementById('gd-check-injected')) {
         document.getElementById('gd-check-injected').addEventListener('click', connectGDWallet);
       }
