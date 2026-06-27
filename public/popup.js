@@ -186,17 +186,47 @@ async function checkGDStatus(address) {
 async function claimGD() {
   const btn = document.getElementById('gd-claim-btn');
   const statusEl = document.getElementById('gd-status');
-  if (!web3authInstance?.provider) { toast('Connect wallet first'); return; }
 
   btn.textContent = 'Claiming…';
   btn.disabled = true;
 
   try {
-    const accounts = await web3authInstance.provider.request({ method: 'eth_accounts' });
-    const from = accounts?.[0];
-    if (!from) throw new Error('No account');
+    // Determine which provider and address to use for claiming
+    const storedGD = localStorage.getItem('gd-verified-addr');
+    let provider = null;
+    let from = null;
 
-    const txHash = await web3authInstance.provider.request({
+    // If the verified address is a linked GD address (social login),
+    // we must use window.ethereum (MetaMask/MiniPay) to sign the tx
+    if (storedGD && window.ethereum) {
+      try {
+        const injected = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        if (injected?.[0]?.toLowerCase() === storedGD.toLowerCase()) {
+          provider = window.ethereum;
+          from = injected[0];
+        }
+      } catch (_) {}
+    }
+
+    // Fall back to Web3Auth provider (works for MetaMask login via Web3Auth)
+    if (!provider && web3authInstance?.provider) {
+      provider = web3authInstance.provider;
+      const accounts = await provider.request({ method: 'eth_accounts' });
+      from = accounts?.[0];
+    }
+
+    if (!provider || !from) {
+      if (storedGD) {
+        toast('Open MetaMask with your GoodDollar wallet to claim');
+      } else {
+        toast('Connect wallet first');
+      }
+      btn.textContent = 'Claim G$';
+      btn.disabled = false;
+      return;
+    }
+
+    const txHash = await provider.request({
       method: 'eth_sendTransaction',
       params: [{ from, to: GD_UBISCHEME, data: SEL_CLAIM, gas: '0x30D40' }], // 200k gas
     });
