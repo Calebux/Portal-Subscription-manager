@@ -62,19 +62,52 @@ async function checkGDStatus(address) {
   verifyLink?.classList.add('hidden');
 
   try {
-    // Check whitelisted
-    const wlResult = await ethCall(GD_IDENTITY, SEL_IS_WHITELISTED + padAddr(address));
-    const isWhitelisted = wlResult && BigInt(wlResult) === 1n;
+    // Check whitelisted with Web3Auth address first
+    let wlResult = await ethCall(GD_IDENTITY, SEL_IS_WHITELISTED + padAddr(address));
+    let isWhitelisted = wlResult && BigInt(wlResult) === 1n;
+    let activeAddr = address;
+
+    // If Web3Auth address isn't verified, try injected wallet (MiniPay / MetaMask)
+    // — the user's GD-verified address is likely their browser wallet, not Web3Auth
+    if (!isWhitelisted && window.ethereum) {
+      try {
+        const injectedAccounts = await window.ethereum.request({ method: 'eth_accounts' });
+        const injectedAddr = injectedAccounts?.[0];
+        if (injectedAddr && injectedAddr.toLowerCase() !== address.toLowerCase()) {
+          const wl2 = await ethCall(GD_IDENTITY, SEL_IS_WHITELISTED + padAddr(injectedAddr));
+          if (wl2 && BigInt(wl2) === 1n) {
+            isWhitelisted = true;
+            activeAddr = injectedAddr;
+            // Store the GD-verified address for claiming
+            localStorage.setItem('gd-verified-addr', injectedAddr);
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Also check previously stored GD address
+    if (!isWhitelisted) {
+      const storedGD = localStorage.getItem('gd-verified-addr');
+      if (storedGD && storedGD.toLowerCase() !== address.toLowerCase()) {
+        const wl3 = await ethCall(GD_IDENTITY, SEL_IS_WHITELISTED + padAddr(storedGD));
+        if (wl3 && BigInt(wl3) === 1n) {
+          isWhitelisted = true;
+          activeAddr = storedGD;
+        }
+      }
+    }
 
     if (!isWhitelisted) {
-      statusEl.textContent = 'Not verified. Get your GoodDollar identity to claim daily G$.';
+      statusEl.innerHTML = 'Not verified. <button id="gd-check-injected" class="text-emerald-500 underline text-xs">Connect GoodDollar wallet</button>';
       verifyLink?.classList.remove('hidden');
       verifyLink?.classList.add('inline-flex');
+      // Add click handler for connecting injected wallet
+      document.getElementById('gd-check-injected')?.addEventListener('click', connectGDWallet);
       return;
     }
 
-    // Check entitlement
-    const entResult = await ethCall(GD_UBISCHEME, SEL_CHECK_ENTITLEMENT + padAddr(address));
+    // Check entitlement using the verified address
+    const entResult = await ethCall(GD_UBISCHEME, SEL_CHECK_ENTITLEMENT + padAddr(activeAddr));
     const entitlement = entResult ? BigInt(entResult) : 0n;
 
     if (entitlement > 0n) {
@@ -145,6 +178,29 @@ async function claimGD() {
     }
     btn.textContent = 'Retry Claim';
     btn.disabled = false;
+  }
+}
+
+async function connectGDWallet() {
+  if (!window.ethereum) {
+    toast('No wallet detected. Install MetaMask or use MiniPay.');
+    return;
+  }
+  try {
+    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    const addr = accounts?.[0];
+    if (!addr) { toast('No account found'); return; }
+
+    const wl = await ethCall(GD_IDENTITY, SEL_IS_WHITELISTED + padAddr(addr));
+    if (wl && BigInt(wl) === 1n) {
+      localStorage.setItem('gd-verified-addr', addr);
+      toast('GoodDollar identity verified!');
+      checkGDStatus(addr);
+    } else {
+      toast('This wallet is not GoodDollar verified');
+    }
+  } catch (err) {
+    toast('Could not connect wallet');
   }
 }
 
@@ -403,6 +459,10 @@ document.addEventListener('click', e => {
     case 'pwaInstall':       installPWA(); break;
     case 'pwaDismiss':       document.getElementById('pwa-install-banner')?.classList.add('hidden'); localStorage.setItem('pwa-dismissed', '1'); break;
     case 'shareApp':         shareApp(); break;
+    case 'showGmailModal':   document.getElementById('modal-gmail-scan')?.classList.add('active'); prefillGmailModal(); break;
+    case 'runGmailScan':     runGmailScan(); break;
+    case 'scanGmail':        runSettingsGmailScan(); break;
+    case 'copyVaultAddr':    copyVaultAddr(); break;
   }
 });
 
@@ -874,6 +934,29 @@ async function saveManualSub() {
   document.getElementById('modal-add-sub')?.classList.remove('active');
   renderSubs();
   refreshDashboard();
+
+  // Immediate renewal alert if within 7 days
+  if (sub.next_renewal) {
+    const days = Math.ceil((new Date(sub.next_renewal) - new Date()) / 86400000);
+    if (days >= 0 && days <= 7) {
+      setTimeout(() => {
+        toast(`⚠️ ${sub.name} renews in ${days} day${days === 1 ? '' : 's'}!`);
+        showAlertBadge();
+      }, 500);
+    }
+  }
+}
+
+function showAlertBadge() {
+  const alertNav = document.querySelector('[data-screen="alerts"]');
+  if (!alertNav && !document.getElementById('alert-badge')) return;
+  if (alertNav && !document.getElementById('alert-badge')) {
+    const badge = document.createElement('span');
+    badge.id = 'alert-badge';
+    badge.className = 'absolute -top-1 -right-1 w-2.5 h-2.5 bg-error rounded-full animate-pulse';
+    alertNav.style.position = 'relative';
+    alertNav.appendChild(badge);
+  }
 }
 
 // ── Export ────────────────────────────────────────────────────────────────
@@ -931,6 +1014,86 @@ async function shareApp() {
   navigator.clipboard.writeText('Check out SubBot — AI subscription manager on Celo: https://subbotai.xyz')
     .then(() => toast('Link copied!'))
     .catch(() => toast('Copy failed'));
+}
+
+// ── Gmail Scan ───────────────────────────────────────────────────────────
+function prefillGmailModal() {
+  // Pre-fill from settings inputs if available
+  const se = document.getElementById('settings-email')?.value;
+  const sp = document.getElementById('settings-password')?.value;
+  if (se) document.getElementById('gmail-scan-email').value = se;
+  if (sp) document.getElementById('gmail-scan-password').value = sp;
+}
+
+async function runGmailScan() {
+  const email    = document.getElementById('gmail-scan-email')?.value?.trim();
+  const password = document.getElementById('gmail-scan-password')?.value?.trim();
+  if (!email || !password) { toast('Email and App Password required'); return; }
+
+  const btn = document.querySelector('[data-action="runGmailScan"]');
+  const origText = btn?.innerHTML;
+  if (btn) { btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-sm"></i> Scanning…'; btn.disabled = true; }
+
+  try {
+    const r = await fetch(`${API}/scan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, userId: userId() }),
+      signal: AbortSignal.timeout(120000),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Scan failed');
+
+    const found = data.subscriptions || [];
+    if (found.length) {
+      // Merge with existing subs (avoid duplicates by name)
+      const existing = new Set(state.subscriptions.map(s => s.name.toLowerCase()));
+      let added = 0;
+      found.forEach(s => {
+        if (!existing.has(s.name.toLowerCase())) {
+          s.id = s.id || ('scan-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6));
+          s.status = s.status || 'active';
+          s.source = 'gmail';
+          state.subscriptions.push(s);
+          added++;
+        }
+      });
+      saveState();
+      toast(`Found ${found.length} subs, ${added} new added!`);
+    } else {
+      toast('No subscriptions found in Gmail');
+    }
+
+    // Save credentials for future scans
+    if (document.getElementById('settings-email')) document.getElementById('settings-email').value = email;
+    if (document.getElementById('settings-password')) document.getElementById('settings-password').value = password;
+
+    document.getElementById('modal-gmail-scan')?.classList.remove('active');
+    renderSubs();
+    refreshDashboard();
+  } catch (err) {
+    console.error('Gmail scan error:', err);
+    toast(err.message || 'Scan failed — check credentials');
+  } finally {
+    if (btn) { btn.innerHTML = origText; btn.disabled = false; }
+  }
+}
+
+async function runSettingsGmailScan() {
+  const email    = document.getElementById('settings-email')?.value?.trim();
+  const password = document.getElementById('settings-password')?.value?.trim();
+  if (!email || !password) { toast('Enter email and App Password first'); return; }
+
+  // Copy to modal and run
+  document.getElementById('gmail-scan-email').value = email;
+  document.getElementById('gmail-scan-password').value = password;
+  await runGmailScan();
+}
+
+function copyVaultAddr() {
+  const addr = document.getElementById('vault-addr')?.textContent;
+  if (!addr || addr === 'Loading…') { toast('No address'); return; }
+  navigator.clipboard.writeText(addr).then(() => toast('Address copied!')).catch(() => toast('Copy failed'));
 }
 
 // ── Theme Toggle ─────────────────────────────────────────────────────────
@@ -1001,6 +1164,20 @@ async function init() {
     showScreen('welcome');
     waitForSDK().then(() => openWeb3AuthModal());
   }
+
+  // Show startup renewal alerts for subs due within 3 days
+  setTimeout(() => {
+    const now = new Date();
+    const urgent = state.subscriptions.filter(s =>
+      s.status === 'active' && s.next_renewal &&
+      Math.ceil((new Date(s.next_renewal) - now) / 86400000) <= 3 &&
+      Math.ceil((new Date(s.next_renewal) - now) / 86400000) >= 0
+    );
+    if (urgent.length) {
+      toast(`⚠️ ${urgent.length} subscription${urgent.length > 1 ? 's' : ''} renew${urgent.length === 1 ? 's' : ''} within 3 days!`);
+      showAlertBadge();
+    }
+  }, 2000);
 
   // Background sync every 60s
   setInterval(() => fetchUserData().catch(() => {}), 60000);
