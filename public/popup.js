@@ -435,11 +435,26 @@ async function claimGD() {
     statusEl.textContent = 'Checking gas…';
     await gdTopGasIfNeeded(from);
 
-    // Send claim() transaction directly
+    // Estimate gas dynamically (claim() can need 300k+)
     statusEl.textContent = 'Sign the claim transaction…';
+    let gasLimit = '0x7A120'; // 500k default
+    try {
+      const estResp = await fetch('https://forno.celo.org', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_estimateGas',
+          params: [{ from, to: GD_UBISCHEME, data: SEL_CLAIM }] }),
+      });
+      const estJson = await estResp.json();
+      if (estJson.result) {
+        // Add 20% buffer to estimated gas
+        const est = Number(BigInt(estJson.result));
+        gasLimit = '0x' + Math.ceil(est * 1.2).toString(16);
+      }
+    } catch (_) {}
+
     const txHash = await provider.request({
       method: 'eth_sendTransaction',
-      params: [{ from, to: GD_UBISCHEME, data: SEL_CLAIM, gas: '0x493E0' }], // 300k gas
+      params: [{ from, to: GD_UBISCHEME, data: SEL_CLAIM, gas: gasLimit }],
     });
 
     statusEl.textContent = 'Confirming…';
