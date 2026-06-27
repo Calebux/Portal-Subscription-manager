@@ -151,9 +151,23 @@ async function payForAction(action) {
     const amountHex = costWei.toString(16).padStart(64, '0');
     const data = SEL_TRANSFER + padAddr(AGENT_WALLET) + amountHex;
 
+    // Estimate gas dynamically (G$ transfer needs ~230k due to extra token logic)
+    let gasLimit = '0x4C4B40'; // 500k default
+    try {
+      const estResp = await fetch('https://forno.celo.org', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_estimateGas',
+          params: [{ from, to: GD_TOKEN, data }] }),
+      });
+      const estJson = await estResp.json();
+      if (estJson.result) {
+        gasLimit = '0x' + Math.ceil(Number(BigInt(estJson.result)) * 1.2).toString(16);
+      }
+    } catch (_) {}
+
     const txHash = await provider.request({
       method: 'eth_sendTransaction',
-      params: [{ from, to: GD_TOKEN, data, gas: '0x12C00' }], // 76800 gas
+      params: [{ from, to: GD_TOKEN, data, gas: gasLimit }],
     });
 
     toast('Confirming payment…');
