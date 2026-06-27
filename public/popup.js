@@ -322,7 +322,23 @@ async function openWeb3AuthModal() {
 
     // Get wallet address from provider
     const accounts = await provider.request({ method: 'eth_accounts' });
-    const address  = accounts?.[0] || '';
+    let address = accounts?.[0] || '';
+
+    // For external wallets (MetaMask etc), also try window.ethereum directly
+    // Web3Auth may wrap the provider and return a derived address
+    if (window.ethereum && window.ethereum !== provider) {
+      try {
+        const directAccounts = await window.ethereum.request({ method: 'eth_accounts' });
+        if (directAccounts?.[0] && directAccounts[0].toLowerCase() !== address.toLowerCase()) {
+          console.log('[SubBot] Web3Auth provider address:', address, '| MetaMask address:', directAccounts[0]);
+          // Prefer the MetaMask address if it's GD-verified
+          const wl = await ethCall(GD_IDENTITY, SEL_IS_WHITELISTED + padAddr(directAccounts[0]));
+          if (wl && BigInt(wl) === 1n) {
+            localStorage.setItem('gd-verified-addr', directAccounts[0]);
+          }
+        }
+      } catch (_) {}
+    }
 
     // getUserInfo works for social logins; external wallets may not have it
     let info = {};
@@ -348,7 +364,15 @@ async function openWeb3AuthModal() {
     const gotData = await fetchUserData(false);
     toast(gotData ? `Welcome back!` : `Connected: ${address ? address.slice(0,6) + '…' + address.slice(-4) : payload.name || 'user'}`);
     showScreen('dashboard');
-    if (address) checkGDStatus(address).catch(() => {});
+    // Check GD status with the login address, then also try stored GD address
+    if (address) {
+      const storedGD = localStorage.getItem('gd-verified-addr');
+      if (storedGD && storedGD.toLowerCase() !== address.toLowerCase()) {
+        checkGDStatus(storedGD).catch(() => {});
+      } else {
+        checkGDStatus(address).catch(() => {});
+      }
+    }
   } catch (err) {
     console.error('Web3Auth error:', err);
     if (!err.message?.includes('user closed') && !err.message?.includes('User closed')) {
