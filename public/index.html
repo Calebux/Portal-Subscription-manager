@@ -183,12 +183,7 @@
       <div class="bg-panel p-3 rounded-xl border border-edge flex flex-col items-center text-center"><span id="stat-annual" class="text-lg font-bold font-mono text-sky-500">$0</span><span class="text-[10px] font-bold uppercase tracking-wider text-muted mt-0.5">annual</span></div>
       <div class="bg-panel p-3 rounded-xl border border-edge flex flex-col items-center text-center"><span id="stat-renewals" class="text-lg font-bold font-mono text-emerald-500">0</span><span class="text-[10px] font-bold uppercase tracking-wider text-muted mt-0.5">renewals</span></div>
     </div>
-    <!-- Wallet strip (visible when Web3Auth connected) -->
-    <div id="wallet-strip" class="hidden flex items-center justify-between px-4 py-2.5 bg-panel rounded-xl border border-edge">
-      <div class="flex items-center gap-2"><i class="fa-solid fa-link text-primary text-sm"></i><span class="text-xs font-bold text-muted">Wallet</span></div>
-      <span id="strip-wallet" class="text-xs font-mono text-main">—</span>
-      <button data-action="copyWallet" class="text-muted hover:text-main p-1" title="Copy"><i class="fa-regular fa-copy text-xs"></i></button>
-    </div>
+    <!-- Wallet strip moved to credits screen -->
     <div id="credits-strip" class="flex items-center justify-between px-4 py-3 bg-panel rounded-xl border border-edge">
       <div class="flex items-center gap-2"><i class="fa-solid fa-wallet text-amber-500 text-lg"></i><span class="text-xs font-bold text-muted uppercase tracking-wider">Wallet Balance</span></div>
       <span id="strip-balance" class="text-sm font-mono font-bold text-main">— G$</span>
@@ -299,6 +294,11 @@
         <span id="gd-wallet-balance" class="hidden">—</span>
       </div>
       <p class="text-[10px] text-muted mt-2">Pay-per-action · G$ on Celo mainnet</p>
+      <div id="wallet-strip" class="hidden flex items-center justify-between mt-3 pt-3 border-t border-edge/30">
+        <div class="flex items-center gap-1.5"><i class="fa-solid fa-link text-primary text-xs"></i><span class="text-[10px] font-bold text-muted">Wallet</span></div>
+        <span id="strip-wallet" class="text-[11px] font-mono text-main">—</span>
+        <button data-action="copyWallet" class="text-muted hover:text-main p-1" title="Copy"><i class="fa-regular fa-copy text-xs"></i></button>
+      </div>
     </div>
 
     <!-- Claim G$ -->
@@ -414,7 +414,7 @@
 
 <!-- MODALS -->
 <div id="modal-negotiate" class="modal-overlay" data-modal="modal-negotiate">
-  <div class="bg-app w-full max-w-[360px] rounded-2xl border border-edge shadow-2xl p-5" data-modal-content>
+  <div class="w-full max-w-[360px] rounded-2xl border border-edge shadow-2xl p-5" style="background:var(--bg-app)" data-modal-content>
     <div class="flex justify-between items-center mb-4"><h2 class="font-bold text-main text-sm">Retention Draft</h2><button data-action="closeModal" data-modal="modal-negotiate"><i class="fa-solid fa-xmark text-muted text-lg hover:text-main"></i></button></div>
     <div class="space-y-3 mb-4">
       <div><label class="text-[10px] uppercase tracking-widest text-muted font-bold">To</label><input id="neg-to" class="w-full bg-field border border-edge rounded-lg py-2 px-3 text-xs mt-1 text-main font-mono"/></div>
@@ -426,7 +426,7 @@
 </div>
 
 <div id="modal-add-sub" class="modal-overlay items-center" data-modal="modal-add-sub">
-  <div class="bg-app w-full max-w-[360px] rounded-2xl border border-edge shadow-2xl p-5" data-modal-content>
+  <div class="w-full max-w-[360px] rounded-2xl border border-edge shadow-2xl p-5" style="background:var(--bg-app)" data-modal-content>
     <div class="flex justify-between items-center mb-4"><h2 id="add-sub-title" class="font-bold text-main text-sm">New Subscription</h2><button data-action="closeModal" data-modal="modal-add-sub"><i class="fa-solid fa-xmark text-muted text-lg hover:text-main"></i></button></div>
     <div class="space-y-3 mb-4">
       <div><label class="text-[10px] uppercase tracking-widest text-muted font-bold">Service Name *</label><input id="add-sub-name" placeholder="e.g. Claude Pro" class="w-full bg-field border border-edge rounded-lg py-2 px-3 text-xs mt-1 text-main"/></div>
@@ -451,7 +451,7 @@
 
 <!-- MODAL: SUBSCRIPTION DETAIL -->
 <div id="modal-sub-detail" class="modal-overlay items-center" data-modal="modal-sub-detail">
-  <div class="bg-app w-full max-w-[360px] rounded-2xl border border-edge shadow-2xl p-5" data-modal-content>
+  <div class="w-full max-w-[360px] rounded-2xl border border-edge shadow-2xl p-5" style="background:var(--bg-app)" data-modal-content>
     <div class="flex justify-between items-center mb-4"><h2 class="font-bold text-main text-sm">Subscription Details</h2><button data-action="closeModal" data-modal="modal-sub-detail"><i class="fa-solid fa-xmark text-muted text-lg hover:text-main"></i></button></div>
     <div id="sub-detail-content" class="space-y-3 mb-4"></div>
     <div class="flex gap-2">
@@ -462,7 +462,7 @@
 </div>
 
 <div id="modal-gmail-scan" class="modal-overlay items-center" data-modal="modal-gmail-scan">
-  <div class="bg-app w-full max-w-[360px] rounded-2xl border border-edge shadow-2xl p-5" data-modal-content>
+  <div class="w-full max-w-[360px] rounded-2xl border border-edge shadow-2xl p-5" style="background:var(--bg-app)" data-modal-content>
     <div class="flex justify-between items-center mb-4"><h2 class="font-bold text-main text-sm">Run IMAP Scan</h2><button data-action="closeModal" data-modal="modal-gmail-scan"><i class="fa-solid fa-xmark text-muted text-lg hover:text-main"></i></button></div>
     <div class="space-y-3 mb-4">
       <div><label class="text-[10px] uppercase tracking-widest text-muted font-bold">Gmail Address</label><input id="gmail-scan-email" type="email" placeholder="you@gmail.com" class="w-full bg-field border border-edge rounded-lg py-2 px-3 text-xs mt-1 text-main"/></div>
@@ -487,7 +487,7 @@
 
 <!-- MODAL: SCAN RESULTS CONFIRMATION -->
 <div id="modal-scan-confirm" class="modal-overlay items-center" data-modal="modal-scan-confirm">
-  <div class="bg-app w-full max-w-[360px] rounded-2xl border border-edge shadow-2xl p-5" data-modal-content>
+  <div class="w-full max-w-[360px] rounded-2xl border border-edge shadow-2xl p-5" style="background:var(--bg-app)" data-modal-content>
     <div class="flex justify-between items-center mb-3">
       <h2 class="font-bold text-main text-sm">Subscriptions Found</h2>
       <button data-action="closeModal" data-modal="modal-scan-confirm"><i class="fa-solid fa-xmark text-muted text-lg hover:text-main"></i></button>
