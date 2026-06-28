@@ -111,7 +111,7 @@ const SEL_CAN_TOP       = '0xe97eefd2'; // canTop(address)→bool
 const SEL_TOP_WALLET    = '0x3771dcf8'; // topWallet(address)
 
 const AGENT_WALLET = '0xfEFAC90c384f6c09004F485b9fa894D9dA910898';
-const ACTION_COSTS = { scan: 0.10, audit: 0.05, negotiate: 0.10, export: 0.05 };
+const ACTION_COSTS = { scan: 0, audit: 0.05, negotiate: 0.10, export: 0.05 };
 
 function padAddr(addr) { return '000000000000000000000000' + addr.slice(2).toLowerCase(); }
 
