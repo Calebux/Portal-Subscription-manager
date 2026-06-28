@@ -230,7 +230,7 @@ def refine_with_llm(records: list[dict]) -> list[dict]:
 1. Is this actually a recurring subscription? (not a one-time purchase, refund, or spam)
 2. The correct clean service name
 3. Category (one of: ai, streaming, productivity, cloud, gaming, finance, education, health, communication, other)
-4. Billing cycle: monthly or annual (infer from the amount — e.g. $99/year vs $9.99/month)
+4. Billing cycle: ONLY mark as "annual" if the email subject/text explicitly says "annual", "yearly", "per year", or "12 months". Otherwise ALWAYS default to "monthly". Do NOT guess from the amount — some services are expensive monthly.
 
 Items:
 {chr(10).join(items)}
