@@ -27,9 +27,9 @@ async function getFxRates() {
     if (Date.now() - ts < 86400000) { _fxRates = rates; return rates; }
   }
   try {
-    const resp = await fetch('https://api.exchangerate.host/latest?base=USD');
+    const resp = await fetch('https://open.er-api.com/v6/latest/USD');
     const json = await resp.json();
-    if (json.rates) {
+    if (json.result === 'success' && json.rates) {
       _fxRates = json.rates;
       _fxRates.USD = 1;
       localStorage.setItem('fx-rates', JSON.stringify({ ts: Date.now(), rates: _fxRates }));
@@ -896,6 +896,8 @@ async function fetchUserData(silent = true) {
         state.subscriptions = d.subscriptions;
         gotData = true;
       }
+      if (d.monthly_budget != null) state.budget = d.monthly_budget;
+      if (d.budget_currency) state.budgetCurrency = d.budget_currency;
     }
   } catch(e) {}
 
@@ -1033,8 +1035,8 @@ function setFilter(f) {
   currentFilter = f;
   document.querySelectorAll('.filter-chip').forEach(c => {
     const on = c.dataset.filter === f;
-    c.classList.toggle('bg-primary-container', on);
-    c.classList.toggle('text-on-primary', on);
+    c.classList.toggle('bg-primary/20', on);
+    c.classList.toggle('text-primary', on);
     c.classList.toggle('bg-panel', !on);
     c.classList.toggle('text-muted', !on);
     c.classList.toggle('border', !on);
@@ -1353,6 +1355,15 @@ function refreshSettings() {
   if (bInput) bInput.value = state.budget || 100;
   const bCur = document.getElementById('budget-currency');
   if (bCur) bCur.value = state.budgetCurrency || 'USD';
+
+  // Show user UUID
+  const uuidEl = document.getElementById('settings-uuid');
+  if (uuidEl) uuidEl.textContent = userId() || '—';
+
+  // Show configured email
+  const emailDisplay = document.getElementById('settings-email-display');
+  const emailInput = document.getElementById('settings-email');
+  if (emailDisplay && emailInput?.value) emailDisplay.textContent = emailInput.value;
 }
 
 async function saveBudget() {
@@ -1447,7 +1458,7 @@ async function saveManualSub() {
 }
 
 function showAlertBadge() {
-  const alertNav = document.querySelector('[data-screen="alerts"]');
+  const alertNav = document.querySelector('[data-tab="alerts"]');
   if (!alertNav && !document.getElementById('alert-badge')) return;
   if (alertNav && !document.getElementById('alert-badge')) {
     const badge = document.createElement('span');
@@ -1482,7 +1493,7 @@ async function exportCSV() {
 // ── Reset ─────────────────────────────────────────────────────────────────
 function resetBot() {
   if (confirm('Reset all SubBot data? This cannot be undone.')) {
-    state = { userId: null, subscriptions: [], budget: 100, balance: 0, txHistory: [] };
+    state = { userId: null, subscriptions: [], budget: 100, budgetCurrency: 'USD', balance: 0, txHistory: [] };
     saveState();
     w3aRemove(() => {
       renderW3AStatus(null);
@@ -1577,6 +1588,8 @@ async function runGmailScan() {
     // Save credentials for future scans
     if (document.getElementById('settings-email')) document.getElementById('settings-email').value = email;
     if (document.getElementById('settings-password')) document.getElementById('settings-password').value = password;
+    const emailDisp = document.getElementById('settings-email-display');
+    if (emailDisp) emailDisp.textContent = email;
 
     document.getElementById('modal-gmail-scan')?.classList.remove('active');
 

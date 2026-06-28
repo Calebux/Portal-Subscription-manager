@@ -330,7 +330,7 @@ app.post('/audit', async (req, res) => {
   // Run LLM analysis in background — return basic summary immediately,
   // full results available via GET /analysis once complete
   const subs    = (data.subscriptions || []).filter(s => s.status === 'active');
-  const monthly = subs.reduce((sum, s) => sum + (s.monthly_cost_usd || s.monthly_cost || 0), 0);
+  const monthly = subs.reduce((sum, s) => sum + (s.monthly_cost || 0), 0);
 
   // Fire off LLM analysis asynchronously
   runPy(`llm-analyze.py --user-id ${userId}`)
