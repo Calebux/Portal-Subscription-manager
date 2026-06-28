@@ -906,7 +906,17 @@ async function fetchUserData(silent = true) {
     if (r.ok) {
       const d = await r.json();
       if (d.subscriptions?.length) {
-        state.subscriptions = d.subscriptions;
+        // Merge: use backend data but preserve client-only flags like renewal_pending
+        const localMap = {};
+        (state.subscriptions || []).forEach(s => { if (s.id) localMap[s.id] = s; });
+        state.subscriptions = d.subscriptions.map(s => {
+          const local = localMap[s.id];
+          // If local copy has a newer next_renewal (user confirmed renewal), keep it
+          if (local && local.next_renewal && s.next_renewal && local.next_renewal > s.next_renewal) {
+            s.next_renewal = local.next_renewal;
+          }
+          return s;
+        });
         gotData = true;
       }
       if (d.monthly_budget != null) state.budget = d.monthly_budget;
@@ -928,6 +938,7 @@ async function fetchUserData(silent = true) {
     }
   } catch(e) {}
 
+  rollRenewals();
   saveState();
   return gotData;
 }
