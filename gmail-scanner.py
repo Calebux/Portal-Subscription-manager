@@ -128,6 +128,11 @@ KNOWN_SERVICES = {
 # Services confirmed as NOT subscriptions (one-time charges, travel eSIM, etc.)
 SKIP_MERCHANTS = {"roamless", "canva"}
 
+# ── LLM Config (OpenRouter + DeepSeek) ────────────────────────────────────────
+LLM_API_KEY  = os.getenv("OPENROUTER_API_KEY", "")
+LLM_BASE_URL = "https://openrouter.ai/api/v1"
+LLM_MODEL    = "deepseek/deepseek-chat"
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def decode_mime_words(s: str) -> str:
@@ -211,23 +216,104 @@ def extract_merchant(from_header: str) -> str:
     return from_header[:40]
 
 
+def refine_with_llm(records: list[dict]) -> list[dict]:
+    """Post-process scan results with DeepSeek to improve accuracy."""
+    if not records or not LLM_API_KEY:
+        return records
+
+    # Build a compact summary for the LLM
+    items = []
+    for i, r in enumerate(records):
+        items.append(f"{i}. merchant=\"{r['merchant']}\" amount={r.get('amount',0)} {r.get('currency','USD')} date={r['date']} subject=\"{r.get('subject','')[:100]}\" status={r.get('status','active')}")
+
+    prompt = f"""I scanned a user's email and found these potential subscriptions. For each one, tell me:
+1. Is this actually a recurring subscription? (not a one-time purchase, refund, or spam)
+2. The correct clean service name
+3. Category (one of: ai, streaming, productivity, cloud, gaming, finance, education, health, communication, other)
+4. Billing cycle: monthly or annual (infer from the amount — e.g. $99/year vs $9.99/month)
+
+Items:
+{chr(10).join(items)}
+
+Reply ONLY with a JSON array. Each element: {{"i": index, "keep": true/false, "name": "Clean Name", "category": "cat", "cycle": "monthly"|"annual"}}
+No explanation, just the JSON array."""
+
+    try:
+        payload = json.dumps({
+            "model": LLM_MODEL,
+            "messages": [
+                {"role": "system", "content": "You are a subscription detection assistant. Output only valid JSON."},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.1,
+            "max_tokens": 1500,
+        }).encode()
+
+        req = urllib.request.Request(
+            f"{LLM_BASE_URL}/chat/completions",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {LLM_API_KEY}",
+                "Content-Type": "application/json",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            raw = json.loads(resp.read())["choices"][0]["message"]["content"]
+
+        # Extract JSON from response (handle markdown code blocks)
+        raw = raw.strip()
+        if raw.startswith("```"):
+            raw = re.sub(r"^```\w*\n?", "", raw)
+            raw = re.sub(r"\n?```$", "", raw)
+        refinements = json.loads(raw)
+
+        # Apply refinements
+        refined = []
+        ref_map = {r["i"]: r for r in refinements}
+        for i, rec in enumerate(records):
+            ref = ref_map.get(i)
+            if ref and not ref.get("keep", True):
+                print(f"  LLM filtered out: {rec['merchant']}")
+                continue
+            if ref:
+                if ref.get("name"):
+                    rec["merchant"] = ref["name"]
+                if ref.get("category"):
+                    rec["llm_category"] = ref["category"]
+                if ref.get("cycle"):
+                    rec["llm_cycle"] = ref["cycle"]
+            refined.append(rec)
+
+        print(f"LLM refinement: {len(records)} → {len(refined)} subscriptions")
+        return refined
+
+    except Exception as e:
+        print(f"LLM refinement failed ({e}), using regex results as-is")
+        return records
+
+
 def to_hermes_subscription(record: dict) -> dict:
     """Convert a scanner record to subscription-manager schema."""
     import calendar
     from datetime import date
 
-    # Estimate next renewal (30 days from last charge)
+    cycle = record.get("llm_cycle", "monthly")
+    renewal_days = 365 if cycle == "annual" else 30
+
+    # Estimate next renewal
     try:
         last_date = datetime.strptime(record["date"], "%Y-%m-%d").date()
-        next_renewal = last_date + timedelta(days=30)
+        next_renewal = last_date + timedelta(days=renewal_days)
     except Exception:
-        next_renewal = (datetime.now() + timedelta(days=30)).date()
+        next_renewal = (datetime.now() + timedelta(days=renewal_days)).date()
 
     merchant = record["merchant"]
     slug = re.sub(r"[^a-z0-9]", "-", merchant.lower()).strip("-")
 
-    amount = record.get("amount") or 0
+    raw_amount = record.get("amount") or 0
     currency = record.get("currency", "USD")
+    # If annual, store monthly equivalent
+    amount = round(raw_amount / 12, 2) if cycle == "annual" else raw_amount
 
     # Pre-calculate USD equivalent so the agent always has it
     try:
@@ -241,11 +327,11 @@ def to_hermes_subscription(record: dict) -> dict:
         "id": slug,
         "name": merchant,
         "provider": merchant,
-        "category": "other",  # agent will refine this
+        "category": record.get("llm_category", "other"),
         "monthly_cost": amount,
         "monthly_cost_usd": monthly_cost_usd,
         "currency": currency,
-        "billing_cycle": "monthly",
+        "billing_cycle": record.get("llm_cycle", "monthly"),
         "next_renewal": str(next_renewal),
         "status": record.get("status", "active"),
         "use_case": "",
@@ -413,6 +499,10 @@ def main():
                 all_cancelled.append(r)
 
     all_records = list(merged.values())
+
+    # LLM post-processing: refine names, categories, filter false positives
+    all_records = refine_with_llm(all_records)
+
     hermes_subs = [to_hermes_subscription(r) for r in all_records]
 
     # Save to per-user file for the skill to load
