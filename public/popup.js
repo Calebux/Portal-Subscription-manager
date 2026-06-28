@@ -179,6 +179,10 @@ async function payForAction(action) {
 
     if (!provider || !from) { toast('No wallet available'); return false; }
 
+    // Top up gas if needed (new Web3Auth wallets have 0 CELO)
+    toast('Checking gas…');
+    await gdTopGasIfNeeded(from);
+
     // Build transfer(address,uint256) calldata
     const costWei = BigInt(Math.round(cost * 1e18));
     const amountHex = costWei.toString(16).padStart(64, '0');
@@ -235,8 +239,10 @@ async function payForAction(action) {
     console.error('Pay error:', err);
     if (err.message?.includes('user') || err.message?.includes('User') || err.code === 4001) {
       toast('Payment cancelled');
+    } else if (err.message?.includes('overshoot') || err.message?.includes('gas') || err.message?.includes('insufficient')) {
+      toast('Not enough CELO for gas fees. Try again in a moment.');
     } else {
-      toast('Payment failed: ' + (err.message || 'unknown'));
+      toast('Payment failed — please try again');
     }
     return false;
   }
