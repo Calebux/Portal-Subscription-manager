@@ -391,7 +391,7 @@
       <div class="bg-panel border border-edge rounded-xl p-4 flex items-center gap-3">
         <div class="w-10 h-10 rounded-full bg-field border border-edge flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-bell text-muted text-base"></i></div>
         <div class="flex-1 min-w-0"><p class="text-sm font-bold text-main">Renewal Alerts</p><p class="text-[10px] text-muted">OS-level alerts before subscriptions renew</p></div>
-        <button id="push-toggle-btn" data-action="togglePushNotifications" class="px-4 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-bold active:scale-95 transition-all">Enable</button>
+        <button id="push-toggle-btn" data-action="togglePushNotifications" class="px-4 py-1.5 rounded-lg bg-primary text-white text-xs font-bold active:scale-95 transition-all">Enable</button>
       </div>
     </section>
     <section class="space-y-2">
@@ -399,12 +399,12 @@
       <div class="bg-panel border border-edge rounded-xl p-5 text-center">
         <div class="inline-flex items-baseline gap-1"><select id="budget-currency" class="bg-transparent border-none p-0 focus:ring-0 text-primary text-2xl font-bold appearance-none cursor-pointer pr-1"><option value="USD">$</option><option value="EUR">€</option><option value="GBP">£</option><option value="NGN">₦</option><option value="KES">KSh</option><option value="GHS">GH₵</option><option value="ZAR">R</option></select><input id="budget-input" type="number" class="bg-transparent border-none p-0 focus:ring-0 text-4xl font-bold w-24 text-main font-mono text-center" value="100"/></div>
         <p class="text-xs text-muted mt-1.5 font-medium">Push notification when exceeded</p>
-        <button data-action="saveBudget" class="mt-3.5 px-6 py-2 rounded-full bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold transition-colors">Save Budget</button>
+        <button data-action="saveBudget" class="mt-3.5 px-6 py-2 rounded-full bg-primary text-white text-xs font-bold transition-colors hover:opacity-90">Save Budget</button>
       </div>
     </section>
     <section class="space-y-2">
-      <button data-action="exportAction" class="w-full py-3 rounded-xl border border-edge bg-panel hover:bg-panel-hover text-primary text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm"><i class="fa-solid fa-download text-sm"></i> Export Portfolio CSV</button>
-      <button data-action="shareApp" class="w-full py-3 rounded-xl border border-edge bg-panel hover:bg-panel-hover text-primary text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm"><i class="fa-solid fa-share-nodes text-sm"></i> Share SubBot with a Friend</button>
+      <button data-action="exportAction" class="w-full py-3 rounded-xl border border-edge bg-panel hover:bg-panel-hover text-main text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm"><i class="fa-solid fa-download text-sm"></i> Export Portfolio CSV</button>
+      <button data-action="shareApp" class="w-full py-3 rounded-xl border border-edge bg-panel hover:bg-panel-hover text-main text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm"><i class="fa-solid fa-share-nodes text-sm"></i> Share SubBot with a Friend</button>
     </section>
     <section class="pt-2 pb-6 text-center">
       <button data-action="resetBot" class="text-error text-xs font-bold flex items-center justify-center gap-1.5 mx-auto hover:opacity-80 transition-opacity"><i class="fa-solid fa-rotate-left text-xs"></i> Reset SubBot Memory</button>
@@ -455,7 +455,7 @@
     <div class="flex justify-between items-center mb-4"><h2 class="font-bold text-main text-sm">Subscription Details</h2><button data-action="closeModal" data-modal="modal-sub-detail"><i class="fa-solid fa-xmark text-muted text-lg hover:text-main"></i></button></div>
     <div id="sub-detail-content" class="space-y-3 mb-4"></div>
     <div class="flex gap-2">
-      <button data-action="editSubFromDetail" class="flex-1 py-3 rounded-xl border border-edge bg-panel hover:bg-panel-hover text-primary text-sm font-bold flex items-center justify-center gap-2 transition-all"><i class="fa-solid fa-pen text-xs"></i> Edit</button>
+      <button data-action="editSubFromDetail" class="flex-1 py-3 rounded-xl border border-edge bg-panel hover:bg-panel-hover text-main text-sm font-bold flex items-center justify-center gap-2 transition-all"><i class="fa-solid fa-pen text-xs"></i> Edit</button>
       <button data-action="deleteSubFromDetail" class="flex-1 py-3 rounded-xl border border-error/30 bg-error/5 hover:bg-error/10 text-error text-sm font-bold flex items-center justify-center gap-2 transition-all"><i class="fa-solid fa-trash text-xs"></i> Delete</button>
     </div>
   </div>
@@ -499,7 +499,7 @@
       <button data-action="scanSelectNone" class="text-[10px] font-bold text-muted hover:underline">Deselect All</button>
     </div>
     <div id="scan-results-list" class="space-y-2 max-h-[300px] overflow-y-auto pr-1" style="scrollbar-width:thin;"></div>
-    <button data-action="scanAnotherEmail" class="w-full mt-3 py-2.5 rounded-xl border border-edge bg-panel hover:bg-panel-hover text-primary text-xs font-bold flex items-center justify-center gap-2 transition-all active:scale-95">
+    <button data-action="scanAnotherEmail" class="w-full mt-3 py-2.5 rounded-xl border border-edge bg-panel hover:bg-panel-hover text-main text-xs font-bold flex items-center justify-center gap-2 transition-all active:scale-95">
       <i class="fa-solid fa-plus text-[10px]"></i> Scan Another Email Account
     </button>
     <div class="flex gap-2 mt-3">

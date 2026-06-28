@@ -1720,7 +1720,7 @@ function renderPushToggle() {
   btn.textContent = enabled ? 'Disable' : 'Enable';
   btn.className = enabled
     ? 'px-4 py-1.5 rounded-lg bg-error/10 text-error text-xs font-bold active:scale-95 transition-all'
-    : 'px-4 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-bold active:scale-95 transition-all';
+    : 'px-4 py-1.5 rounded-lg bg-primary text-white text-xs font-bold active:scale-95 transition-all';
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────
