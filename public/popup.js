@@ -110,8 +110,9 @@ const SEL_CURRENT_DAY   = '0x5c9302c9'; // currentDay()→uint256
 const SEL_CAN_TOP       = '0xe97eefd2'; // canTop(address)→bool
 const SEL_TOP_WALLET    = '0x3771dcf8'; // topWallet(address)
 
-const AGENT_WALLET = '0xfEFAC90c384f6c09004F485b9fa894D9dA910898';
-const ACTION_COSTS = { scan: 0, audit: 0.05, negotiate: 0.10, export: 0.05 };
+const CREDITS_CONTRACT = '0xdF61E8D2a22e456a87998Ab78d00E57d099660e8'; // SubBotCredits on Celo mainnet
+const ACTION_COSTS = { scan: 0.10, audit: 0.05, negotiate: 0.10, export: 0.05 };
+const SEL_APPROVE     = '0x095ea7b3'; // approve(address,uint256)
 
 function padAddr(addr) { return '000000000000000000000000' + addr.slice(2).toLowerCase(); }
 
@@ -126,90 +127,166 @@ async function ethCall(to, data, from) {
   return j.result;
 }
 
-// ── Pay-per-action: G$ transfer to agent wallet ──────────────────────────
+// ── Pay-per-action: check backend credits → prompt deposit if needed ─────
 async function payForAction(action) {
   const cost = ACTION_COSTS[action];
   if (!cost) return true; // free action
 
-  // Get wallet address and check balance
-  const storedGD = localStorage.getItem('gd-verified-addr');
-  let addr = storedGD;
-  if (!addr) {
-    try { const w3a = JSON.parse(localStorage.getItem('web3auth')); addr = w3a?.walletAddress; } catch (_) {}
+  // Try backend credits first (SubBotCredits contract, agent-signed)
+  try {
+    const uid = userId();
+    const chargeResp = await fetch(`${API}/charge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: uid, action }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const chargeData = await chargeResp.json();
+    if (chargeData.ok && chargeData.mode === 'credits') {
+      toast(`Paid ${cost.toFixed(2)} G$ for ${action}`);
+      state.txHistory = [{ type: 'deduct', action, amount: cost, ts: new Date().toISOString(), txHash: chargeData.txHash }, ...(state.txHistory || [])].slice(0, 200);
+      saveState();
+      fetchCreditsBalance();
+      return true;
+    }
+    // Free tier — allowed through
+    if (chargeData.ok && chargeData.mode === 'free') {
+      return true;
+    }
+  } catch (_) {}
+
+  // No credits — redirect user to deposit screen instead of sending G$ directly
+  toast(`Insufficient credits — deposit G$ first (need ${cost.toFixed(2)} G$)`);
+  showScreen('credits');
+  return false;
+}
+
+// ── SubBotCredits helpers (deposit / withdraw / balance via backend) ──────
+async function fetchCreditsBalance() {
+  const uid = userId();
+  try {
+    const r = await fetch(`${API}/credits/${encodeURIComponent(uid)}`, { signal: AbortSignal.timeout(5000) });
+    if (!r.ok) return;
+    const d = await r.json();
+    const bal = parseFloat(d.balance) || 0;
+    const el = document.getElementById('credits-contract-balance');
+    if (el) el.textContent = bal.toFixed(2);
+    const opsEl = document.getElementById('credits-ops-remaining');
+    if (opsEl) opsEl.textContent = d.opsRemaining || 0;
+  } catch (_) {}
+}
+
+async function depositToCredits() {
+  const amountInput = document.getElementById('credits-deposit-amount');
+  const amount = parseFloat(amountInput?.value);
+  if (!amount || amount <= 0) { toast('Enter an amount'); return; }
+
+  const { provider, from } = await getGDProvider();
+  if (!provider || !from) { toast('Connect wallet first'); return; }
+
+  const uid = userId();
+  const creditsAddr = CREDITS_CONTRACT;
+  if (!creditsAddr) { toast('Credits contract not configured'); return; }
+
+  const costWei = BigInt(Math.round(amount * 1e18));
+  const amountHex = costWei.toString(16).padStart(64, '0');
+
+  toast('Approving G$…');
+  await gdTopGasIfNeeded(from);
+
+  // Step 1: approve(creditsContract, amount)
+  const approveData = SEL_APPROVE + padAddr(creditsAddr) + amountHex;
+  try {
+    const approveTx = await provider.request({
+      method: 'eth_sendTransaction',
+      params: [{ from, to: GD_TOKEN, data: approveData, gas: '0x4C4B40' }],
+    });
+    toast('Waiting for approval…');
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      const resp = await fetch('https://forno.celo.org', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getTransactionReceipt', params: [approveTx] }),
+      });
+      const j = await resp.json();
+      if (j.result) { if (j.result.status !== '0x1') { toast('Approval failed'); return; } break; }
+    }
+  } catch (err) {
+    if (err.code === 4001) { toast('Approval cancelled'); return; }
+    toast('Approval failed'); return;
   }
-  if (!addr) { toast('Connect wallet first'); return false; }
 
-  // Check G$ balance
-  const balResult = await ethCall(GD_TOKEN, SEL_BALANCE_OF + padAddr(addr));
-  const balance = balResult ? Number(BigInt(balResult)) / 1e18 : 0;
-  if (balance < cost) {
-    toast(`Insufficient G$ — need ${cost.toFixed(2)}, have ${balance.toFixed(2)}`);
-    return false;
-  }
-
-  // Confirm with user
-  const ok = confirm(`This ${action} costs ${cost.toFixed(2)} G$. Pay now?`);
-  if (!ok) return false;
-
-  toast('Sending G$ payment…');
+  // Step 2: deposit(userId, amount) — encode string + uint256
+  toast('Depositing to credits…');
+  const uidBytes = new TextEncoder().encode(uid);
+  const uidHex = Array.from(uidBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  // ABI encode: deposit(string,uint256) — selector 0x8e27d719
+  // Layout: offset to string (0x40), uint256 amount, string length, string data
+  const stringOffset = '0000000000000000000000000000000000000000000000000000000000000040';
+  const amountPadded = costWei.toString(16).padStart(64, '0');
+  const stringLen = uidBytes.length.toString(16).padStart(64, '0');
+  const stringData = uidHex.padEnd(Math.ceil(uidHex.length / 64) * 64, '0');
+  // deposit(string,uint256) selector = keccak("deposit(string,uint256)") first 4 bytes
+  // = 0x6f7bc9be (precomputed)
+  const depositData = '0x8e27d719' + stringOffset + amountPadded + stringLen + stringData;
 
   try {
-    // Get provider — injected wallet first, then Web3Auth
-    let provider = null;
-    let from = null;
-
-    if (storedGD && window.ethereum) {
-      try {
-        const injected = await window.ethereum.request({ method: 'eth_requestAccounts' });
-        if (injected?.[0]?.toLowerCase() === storedGD.toLowerCase()) {
-          provider = window.ethereum;
-          from = injected[0];
-        }
-      } catch (_) {}
-    }
-
-    if (!provider) {
-      if (!web3authInstance) { try { await getWeb3Auth(); } catch (_) {} }
-      if (web3authInstance?.connected && web3authInstance.provider) {
-        provider = web3authInstance.provider;
-        const accounts = await provider.request({ method: 'eth_accounts' });
-        from = accounts?.[0];
-      }
-    }
-
-    if (!provider || !from) { toast('No wallet available'); return false; }
-
-    // Top up gas if needed (new Web3Auth wallets have 0 CELO)
-    toast('Checking gas…');
-    await gdTopGasIfNeeded(from);
-
-    // Build transfer(address,uint256) calldata
-    const costWei = BigInt(Math.round(cost * 1e18));
-    const amountHex = costWei.toString(16).padStart(64, '0');
-    const data = SEL_TRANSFER + padAddr(AGENT_WALLET) + amountHex;
-
-    // Estimate gas dynamically (G$ transfer needs ~230k due to extra token logic)
-    let gasLimit = '0x4C4B40'; // 500k default
-    try {
-      const estResp = await fetch('https://forno.celo.org', {
+    const depositTx = await provider.request({
+      method: 'eth_sendTransaction',
+      params: [{ from, to: creditsAddr, data: depositData, gas: '0x7A120' }],
+    });
+    toast('Confirming deposit…');
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      const resp = await fetch('https://forno.celo.org', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_estimateGas',
-          params: [{ from, to: GD_TOKEN, data }] }),
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getTransactionReceipt', params: [depositTx] }),
       });
-      const estJson = await estResp.json();
-      if (estJson.result) {
-        gasLimit = '0x' + Math.ceil(Number(BigInt(estJson.result)) * 1.2).toString(16);
+      const j = await resp.json();
+      if (j.result) {
+        if (j.result.status === '0x1') {
+          toast(`Deposited ${amount.toFixed(2)} G$ to credits!`);
+          if (amountInput) amountInput.value = '';
+          fetchCreditsBalance();
+          fetchGDWalletBalance();
+          return;
+        } else { toast('Deposit failed'); return; }
       }
-    } catch (_) {}
+    }
+    toast('Deposit timed out');
+  } catch (err) {
+    if (err.code === 4001) { toast('Deposit cancelled'); return; }
+    toast('Deposit failed'); console.error(err);
+  }
+}
 
+async function withdrawCredits() {
+  const { provider, from } = await getGDProvider();
+  if (!provider || !from) { toast('Connect wallet first'); return; }
+
+  const uid = userId();
+  const creditsAddr = CREDITS_CONTRACT;
+  if (!creditsAddr) { toast('Credits contract not configured'); return; }
+
+  toast('Withdrawing credits…');
+  await gdTopGasIfNeeded(from);
+
+  // withdraw(string userId, uint256 amount) — amount=0 means withdraw all
+  const uidBytes = new TextEncoder().encode(uid);
+  const uidHex = Array.from(uidBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  const stringOffset = '0000000000000000000000000000000000000000000000000000000000000040';
+  const amountPadded = '0'.padStart(64, '0'); // 0 = withdraw all
+  const stringLen = uidBytes.length.toString(16).padStart(64, '0');
+  const stringData = uidHex.padEnd(Math.ceil(uidHex.length / 64) * 64, '0');
+  // withdraw(string,uint256) selector = 0x9e2bf22c (precomputed)
+  const withdrawData = '0x30b39a62' + stringOffset + amountPadded + stringLen + stringData;
+
+  try {
     const txHash = await provider.request({
       method: 'eth_sendTransaction',
-      params: [{ from, to: GD_TOKEN, data, gas: gasLimit }],
+      params: [{ from, to: creditsAddr, data: withdrawData, gas: '0x7A120' }],
     });
-
-    toast('Confirming payment…');
-
-    // Poll for receipt
+    toast('Confirming withdrawal…');
     for (let i = 0; i < 20; i++) {
       await new Promise(r => setTimeout(r, 2000));
       const resp = await fetch('https://forno.celo.org', {
@@ -219,32 +296,17 @@ async function payForAction(action) {
       const j = await resp.json();
       if (j.result) {
         if (j.result.status === '0x1') {
-          toast(`Paid ${cost.toFixed(2)} G$ for ${action}`);
-          // Record in tx history
-          state.txHistory = [{ type: 'deduct', action, amount: cost, ts: new Date().toISOString(), txHash }, ...(state.txHistory || [])].slice(0, 200);
-          saveState();
-          // Refresh balance display
+          toast('G$ withdrawn from credits!');
+          fetchCreditsBalance();
           fetchGDWalletBalance();
-          return true;
-        } else {
-          toast('Payment transaction failed');
-          return false;
-        }
+          return;
+        } else { toast('Withdrawal failed'); return; }
       }
     }
-
-    toast('Payment timed out');
-    return false;
+    toast('Withdrawal timed out');
   } catch (err) {
-    console.error('Pay error:', err);
-    if (err.message?.includes('user') || err.message?.includes('User') || err.code === 4001) {
-      toast('Payment cancelled');
-    } else if (err.message?.includes('overshoot') || err.message?.includes('gas') || err.message?.includes('insufficient')) {
-      toast('Not enough CELO for gas fees. Try again in a moment.');
-    } else {
-      toast('Payment failed — please try again');
-    }
-    return false;
+    if (err.code === 4001) { toast('Withdrawal cancelled'); return; }
+    toast('Withdrawal failed'); console.error(err);
   }
 }
 
@@ -884,7 +946,8 @@ document.addEventListener('click', e => {
     case 'showGmailModal':   document.getElementById('modal-gmail-scan')?.classList.add('active'); prefillGmailModal(); break;
     case 'runGmailScan':     runGmailScan(); break;
     case 'scanGmail':        runSettingsGmailScan(); break;
-    case 'copyVaultAddr':    copyVaultAddr(); break;
+    case 'depositCredits':   depositToCredits(); break;
+    case 'withdrawCredits':  withdrawCredits(); break;
     case 'togglePushNotifications': togglePushNotifications(); break;
     case 'confirmScanSubs':  confirmScanSubs(); break;
     case 'scanSelectAll':    document.querySelectorAll('#scan-results-list input[type="checkbox"]').forEach(cb => cb.checked = true); break;
@@ -1311,6 +1374,7 @@ function copyNegotiationEmail() {
 // ── Credits ───────────────────────────────────────────────────────────────
 function refreshCredits() {
   fetchGDWalletBalance();
+  fetchCreditsBalance();
   renderTxHistory();
 }
 
@@ -1609,11 +1673,15 @@ async function runGmailScan() {
       return;
     }
 
-    // Save credentials for future scans
+    // Save email for future scans (never persist password)
     if (document.getElementById('settings-email')) document.getElementById('settings-email').value = email;
-    if (document.getElementById('settings-password')) document.getElementById('settings-password').value = password;
     const emailDisp = document.getElementById('settings-email-display');
     if (emailDisp) emailDisp.textContent = email;
+    // Clear password fields — never keep in DOM
+    const scanPwField = document.getElementById('gmail-scan-password');
+    if (scanPwField) scanPwField.value = '';
+    const settingsPwField = document.getElementById('settings-password');
+    if (settingsPwField) settingsPwField.value = '';
 
     document.getElementById('modal-gmail-scan')?.classList.remove('active');
 
@@ -1636,12 +1704,6 @@ async function runSettingsGmailScan() {
   document.getElementById('gmail-scan-email').value = email;
   document.getElementById('gmail-scan-password').value = password;
   await runGmailScan();
-}
-
-function copyVaultAddr() {
-  const addr = document.getElementById('vault-addr')?.textContent;
-  if (!addr || addr === 'Loading…') { toast('No address'); return; }
-  navigator.clipboard.writeText(addr).then(() => toast('Address copied!')).catch(() => toast('Copy failed'));
 }
 
 // ── Theme Toggle ─────────────────────────────────────────────────────────

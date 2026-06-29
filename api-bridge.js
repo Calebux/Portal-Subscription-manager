@@ -8,14 +8,14 @@
 require('./load-env');
 const express = require('express');
 const cors    = require('cors');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 const fs      = require('fs');
 const path    = require('path');
 const https   = require('https');
 
-// On-chain contracts (SubBotLog + SubBotVault)
-let logContract   = null;
-let vaultContract = null;
+// On-chain contracts (SubBotLog + SubBotCredits)
+let logContract    = null;
+let creditsContract = null;
 
 (async () => {
   const privateKey = process.env.AGENT_PRIVATE_KEY;
@@ -37,10 +37,10 @@ let vaultContract = null;
       console.log(`[SubBot] Decision log active → ${process.env.LOG_CONTRACT_ADDRESS}`);
     }
 
-    if (process.env.VAULT_CONTRACT_ADDRESS) {
-      const vaultABI = require('./build/SubBotVault.abi.json');
-      vaultContract  = new ethers.Contract(process.env.VAULT_CONTRACT_ADDRESS, vaultABI, wallet);
-      console.log(`[SubBot] Vault active         → ${process.env.VAULT_CONTRACT_ADDRESS}`);
+    if (process.env.CREDITS_CONTRACT_ADDRESS) {
+      const creditsABI = require('./build/SubBotCredits.abi.json');
+      creditsContract  = new ethers.Contract(process.env.CREDITS_CONTRACT_ADDRESS, creditsABI, wallet);
+      console.log(`[SubBot] Credits active        → ${process.env.CREDITS_CONTRACT_ADDRESS}`);
     }
   } catch (e) {
     console.warn('[SubBot] Contract init failed:', e.message);
@@ -300,12 +300,31 @@ app.post('/scan', async (req, res) => {
   const { email, password, userId = 'local' } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'email and password required' });
   try {
-    const out = await runPy(`gmail-scanner.py --email "${email}" --password "${password}" --user-id ${userId}`);
+    // Use spawn() + stdin so password never appears in process args (invisible to `ps`)
+    const out = await new Promise((resolve, reject) => {
+      const child = spawn('python3', [
+        path.join(HERMES_HOME, 'gmail-scanner.py'),
+        '--email', email,
+        '--user-id', userId,
+      ], { timeout: 120000 });
+      // Send password via stdin as JSON array
+      child.stdin.write(JSON.stringify([password]));
+      child.stdin.end();
+      let stdout = '', stderr = '';
+      child.stdout.on('data', d => stdout += d);
+      child.stderr.on('data', d => stderr += d);
+      child.on('close', code => {
+        if (code !== 0) reject({ error: stderr || `exit code ${code}` });
+        else resolve(stdout);
+      });
+      child.on('error', err => reject({ error: err.message }));
+    });
     const file = path.join(userDir(userId), 'scanned-subscriptions.json');
     const data = readJSON(file);
     res.json(data || { subscriptions: [] });
   } catch(e) {
-    const safeError = (e.error || 'Scan failed').replace(password, '***').replace(email, '***');
+    // Sanitize error — never leak credentials
+    const safeError = (e.error || 'Scan failed').replace(/[^\s]{16,}/g, '***');
     res.status(500).json({ error: safeError });
   }
 });
@@ -495,170 +514,116 @@ app.get('/decisions', (req, res) => {
   res.json(readJSON(file) || { decisions: [], totalSavedUSD: 0 });
 });
 
-// ── Vault routes ────────────────────────────────────────────────────────────
+// ── Credits routes (SubBotCredits contract — pure G$) ─────────────────────
 
-// GET /vault/:userId — full vault state
-app.get('/vault/:userId', async (req, res) => {
-  if (!vaultContract) return res.status(503).json({ error: 'Vault not configured', configured: false });
-  const { ethers } = require('ethers');
+// G$ operation costs in G$ (matches contract constants)
+const OP_COSTS_GD = { scan: 0.10, audit: 0.05, negotiate: 0.10, export: 0.05 };
+
+// GET /credits/:userId — balance, totalDeposited, totalSpent, opsRemaining
+app.get('/credits/:userId', async (req, res) => {
+  if (!creditsContract) return res.json({ balance: '0', totalDeposited: '0', totalSpent: '0', opsRemaining: 0, configured: false });
   try {
-    const r = await vaultContract.getVault(req.params.userId);
+    const { ethers } = require('ethers');
+    const [balance, totalDeposited, totalSpent, opsRemaining] = await creditsContract.getCredits(req.params.userId);
     res.json({
-      principal:        ethers.formatEther(r.principal),
-      credits:          ethers.formatEther(r.credits),
-      pending:          ethers.formatEther(r.pending),
-      totalYieldEarned: ethers.formatEther(r.totalYieldEarned),
-      totalSpent:       ethers.formatEther(r.totalSpent),
-      selfSustaining:   r.selfSustaining,
-      vaultAddress:     process.env.VAULT_CONTRACT_ADDRESS,
-      apy:              '10%',
+      balance:        ethers.formatEther(balance),
+      totalDeposited: ethers.formatEther(totalDeposited),
+      totalSpent:     ethers.formatEther(totalSpent),
+      opsRemaining:   Number(opsRemaining),
+      configured:     true,
+      creditsAddress: process.env.CREDITS_CONTRACT_ADDRESS,
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// POST /vault/harvest — agent harvests pending yield into credits
-app.post('/vault/harvest', async (req, res) => {
-  if (!vaultContract) return res.status(503).json({ error: 'Vault not configured' });
-  const { userId } = req.body;
-  if (!userId) return res.status(400).json({ error: 'userId required' });
-  try {
-    const tx    = await vaultContract.harvestYield(userId);
-    const rcpt  = await tx.wait();
-    const { ethers } = require('ethers');
-    const r     = await vaultContract.getVault(userId);
-    res.json({ ok: true, txHash: tx.hash, credits: ethers.formatEther(r.credits) });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// POST /vault/spend — agent spends credits for an operation
-app.post('/vault/spend', async (req, res) => {
-  if (!vaultContract) return res.status(503).json({ error: 'Vault not configured' });
+// POST /credits/spend — agent spends credits for an action
+app.post('/credits/spend', async (req, res) => {
+  if (!creditsContract) return res.status(503).json({ error: 'Credits contract not configured' });
   const { userId, action } = req.body;
   if (!userId || !action) return res.status(400).json({ error: 'userId and action required' });
 
-  const COSTS = { scan: '2000000000000000', audit: '2000000000000000',
-                  negotiate: '5000000000000000', export: '1000000000000000' };
-  const cost = COSTS[action];
-  if (!cost) return res.status(400).json({ error: `Unknown action: ${action}` });
-
   try {
-    const tx = await vaultContract.spendCredits(userId, cost, action);
+    const tx = await creditsContract.spendCredits(userId, action);
     await tx.wait();
     const { ethers } = require('ethers');
-    const r  = await vaultContract.getVault(userId);
-    res.json({ ok: true, txHash: tx.hash, action, costCUSD: ethers.formatEther(cost),
-               creditsRemaining: ethers.formatEther(r.credits) });
+    const [balance] = await creditsContract.getCredits(userId);
+    res.json({ ok: true, txHash: tx.hash, action, creditsRemaining: ethers.formatEther(balance) });
   } catch (e) {
-    // If vault credits are insufficient, fall back to wallet balance (old pay-per-run)
-    res.status(402).json({ error: e.message, fallback: 'wallet_balance' });
+    res.status(402).json({ error: e.message });
   }
-});
-
-// POST /vault/withdraw — return principal to user's wallet
-app.post('/vault/withdraw', async (req, res) => {
-  if (!vaultContract) return res.status(503).json({ error: 'Vault not configured' });
-  const { userId, amount, toAddress } = req.body;
-  if (!userId || !amount || !toAddress) return res.status(400).json({ error: 'userId, amount, toAddress required' });
-  try {
-    const { ethers } = require('ethers');
-    const tx = await vaultContract.withdrawPrincipal(userId, ethers.parseEther(String(amount)), toAddress);
-    await tx.wait();
-    res.json({ ok: true, txHash: tx.hash, amount, toAddress });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// POST /vault/fund-reserve — fund yield reserve (admin)
-app.post('/vault/fund-reserve', async (req, res) => {
-  res.json({ vaultAddress: process.env.VAULT_CONTRACT_ADDRESS,
-             instructions: 'Deposit G$ into the vault — it is supplied to Aave automatically.' });
 });
 
 // ── Unified charge endpoint ────────────────────────────────────────────────
-// Tries vault first (yield credits). Falls back to pay-per-run if no vault.
-// Python scripts call this instead of /vault/spend directly.
-//
-// Response when vault covers it:  { ok:true, mode:'vault', txHash, costCUSD }
-// Response when pay-per-run:      { ok:false, mode:'pay_per_run', costCUSD, payTo, instructions }
-
-const OP_COSTS_CUSD = { scan: 0.002, audit: 0.002, negotiate: 0.005, export: 0.001 };
+// Tries SubBotCredits first (G$ credits). Falls back to free tier.
 
 app.post('/charge', async (req, res) => {
   const { userId, action } = req.body;
   if (!userId || !action) return res.status(400).json({ error: 'userId and action required' });
 
-  const costCUSD = OP_COSTS_CUSD[action];
-  if (costCUSD === undefined) return res.status(400).json({ error: `Unknown action: ${action}` });
+  const costGD = OP_COSTS_GD[action];
+  if (costGD === undefined) return res.status(400).json({ error: `Unknown action: ${action}` });
 
-  const { ethers } = require('ethers');
-  const costWei = ethers.parseEther(String(costCUSD)).toString();
-
-  // ── Try vault mode first ──────────────────────────────────────────────────
-  if (vaultContract) {
+  // ── Try SubBotCredits first ───────────────────────────────────────────────
+  if (creditsContract) {
     try {
-      const vault = await vaultContract.getVault(userId);
-      if (vault.credits >= BigInt(costWei)) {
-        const tx = await vaultContract.spendCredits(userId, costWei, action);
+      const canAfford = await creditsContract.canAfford(userId, action);
+      if (canAfford) {
+        const tx = await creditsContract.spendCredits(userId, action);
         await tx.wait();
-        const updated = await vaultContract.getVault(userId);
+        const { ethers } = require('ethers');
+        const [balance] = await creditsContract.getCredits(userId);
         return res.json({
           ok: true,
-          mode: 'vault',
+          mode: 'credits',
           txHash: tx.hash,
           action,
-          costCUSD,
-          creditsRemaining: ethers.formatEther(updated.credits)
+          costGD,
+          creditsRemaining: ethers.formatEther(balance),
         });
       }
     } catch (e) {
-      // vault call failed — fall through to pay-per-run
+      // credits call failed — fall through to free tier
     }
   }
 
   // ── Free tier fallback ────────────────────────────────────────────────────
-  // No vault deposit? Operations run free. Usage is tracked so users can see
-  // what the vault would cover. The vault pitch lands after they've seen value.
   const file   = path.join(userDir(userId), 'free-usage.json');
   const usage  = readJSON(file) || { total: 0, actions: [] };
   usage.total  += 1;
-  usage.actions = [{ action, costCUSD, ts: new Date().toISOString() }, ...usage.actions].slice(0, 100);
+  usage.actions = [{ action, costGD, ts: new Date().toISOString() }, ...usage.actions].slice(0, 100);
   writeJSON(file, usage);
 
   res.json({
     ok: true,
     mode: 'free',
     action,
-    costCUSD,
+    costGD,
     totalFreeRuns: usage.total,
-    hint: usage.total >= 5 ? `You've run ${usage.total} operations free. Deposit G$ into the vault and it runs forever from yield.` : null
+    hint: usage.total >= 5 ? `You've used ${usage.total} free runs. Deposit G$ into credits to keep going.` : null,
   });
 });
 
 // GET /charge-mode/:userId — tells the bot/frontend which mode the user is in
 app.get('/charge-mode/:userId', async (req, res) => {
   const { userId } = req.params;
-  if (!vaultContract) return res.json({ mode: 'free', canRunNow: true });
+  if (!creditsContract) return res.json({ mode: 'free', canRunNow: true });
 
   try {
     const { ethers } = require('ethers');
-    const vault = await vaultContract.getVault(userId);
-    const hasPrincipal = vault.principal > 0n;
-    const hasCredits   = vault.credits > 0n;
+    const [balance, totalDeposited, totalSpent, opsRemaining] = await creditsContract.getCredits(userId);
+    const hasCredits = balance > 0n;
     res.json({
-      mode: hasPrincipal ? 'vault' : 'free',
-      principal: ethers.formatEther(vault.principal),
-      credits:   ethers.formatEther(vault.credits),
-      selfSustaining: vault.selfSustaining,
-      vaultActive: hasPrincipal,
-      canRunNow: true   // always true — free tier has no gate
+      mode: hasCredits ? 'credits' : 'free',
+      balance: ethers.formatEther(balance),
+      totalDeposited: ethers.formatEther(totalDeposited),
+      opsRemaining: Number(opsRemaining),
+      creditsActive: hasCredits,
+      canRunNow: true,
     });
   } catch (e) {
-    res.json({ mode: 'pay_per_run', error: e.message });
+    res.json({ mode: 'free', error: e.message, canRunNow: true });
   }
 });
 

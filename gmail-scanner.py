@@ -465,16 +465,23 @@ def send_telegram(chat_id: str, message: str):
 def main():
     parser = argparse.ArgumentParser(description="Hermes Gmail Subscription Scanner")
     parser.add_argument("--email", action="append", required=True, help="Gmail address (repeat for multiple accounts)")
-    parser.add_argument("--password", action="append", required=True, help="Gmail App Password (repeat for multiple accounts)")
     parser.add_argument("--user-id", default=None, help="Telegram user ID for namespacing")
     parser.add_argument("--notify", action="store_true", help="Send results to Telegram")
     args = parser.parse_args()
 
-    if len(args.email) != len(args.password):
-        print("Error: number of --email and --password arguments must match")
+    # Read passwords from stdin as JSON (keeps them out of process args / ps output)
+    try:
+        creds = json.loads(sys.stdin.readline())
+        passwords = creds if isinstance(creds, list) else [creds]
+    except Exception:
+        print("Error: passwords must be provided via stdin as JSON array")
         sys.exit(1)
 
-    accounts = list(zip(args.email, args.password))
+    if len(args.email) != len(passwords):
+        print("Error: number of --email args and stdin passwords must match")
+        sys.exit(1)
+
+    accounts = list(zip(args.email, passwords))
     user_id = args.user_id or "default"
     chat_id = args.user_id or "6710506545"
 

@@ -21,13 +21,13 @@ interface IERC20 {
  * At current costs, 1 G$ covers ~10 scans or ~20 audits.
  * One week of daily G$ claims funds a month of heavy usage.
  *
- * GoodDollar (G$) on Celo: 0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c14
+ * GoodDollar (G$) on Celo: 0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A
  */
 contract SubBotCredits {
 
     // ── Constants ────────────────────────────────────────────────────────────
 
-    IERC20 public constant GD = IERC20(0x62B8b11039fcfe5Ab0c56E502B1c372a3d2a9C14);
+    IERC20 public constant GD = IERC20(0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A);
 
     // Operation costs in G$ wei (G$ has 18 decimals, so 0.10 G$ = 0.1 ether)
     uint256 public constant COST_SCAN      = 0.10 ether;  // Gmail scan
@@ -68,7 +68,7 @@ contract SubBotCredits {
     }
 
     modifier onlyAgent() {
-        require(msg.sender == agent || msg.sender == owner, "Unauthorized");
+        require(msg.sender == agent, "Unauthorized");
         _;
     }
 
@@ -219,10 +219,6 @@ contract SubBotCredits {
 
     function setAgent(address _agent) external onlyOwner {
         agent = _agent;
-    }
-
-    function rescueTokens(address token, address to, uint256 amount) external onlyOwner {
-        IERC20(token).transfer(to, amount);
     }
 
     // ── Internal ─────────────────────────────────────────────────────────────

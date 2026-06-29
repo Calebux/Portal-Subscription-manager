@@ -1,11 +1,8 @@
 #!/usr/bin/env node
 /**
- * Deploy SubBotLog + SubBotVault to Celo Mainnet
- * Run: node deploy-contract.js
+ * Deploy SubBot contracts to Celo Mainnet
+ * Run: node deploy-contract.js [SubBotCredits|SubBotLog]
  * Requires: .env with AGENT_PRIVATE_KEY, wallet funded with CELO for gas
- *
- * SubBotVault earns real yield via Aave v3 on Celo — no reserve seeding needed.
- * User deposits go directly into Aave. Yield comes from real borrowers paying interest.
  */
 
 require('./load-env');
@@ -39,12 +36,12 @@ async function main() {
   console.log(`Network:  Celo (chainId ${network.chainId})`);
   console.log(`Deployer: ${wallet.address}`);
   console.log(`Balance:  ${ethers.formatEther(balance)} CELO`);
-  console.log(`\nYield source: Aave v3 on Celo (0x3E59A31363E2ad014dcbc521c4a0d5757d9f3402)`);
-  console.log(`Asset:        cUSD / USDm (0x765DE816845861e75A25fCA122bb6898B8B1282a)`);
+
+  const target = process.argv[2] || 'SubBotCredits';
 
   // ── Deploy SubBotLog (skip if already deployed) ──────────────────────────
   let logAddress = process.env.LOG_CONTRACT_ADDRESS;
-  if (!logAddress) {
+  if (target === 'SubBotLog' || !logAddress) {
     const logABI      = JSON.parse(fs.readFileSync('build/SubBotLog.abi.json', 'utf8'));
     const logBytecode = fs.readFileSync('build/SubBotLog.bytecode.txt', 'utf8').trim();
     const { address } = await deployContract('SubBotLog', logABI, logBytecode, wallet);
@@ -53,32 +50,32 @@ async function main() {
     console.log(`\nSubBotLog already deployed → ${logAddress} (skipping)`);
   }
 
-  // ── Deploy SubBotVault ───────────────────────────────────────────────────
-  const vaultABI      = JSON.parse(fs.readFileSync('build/SubBotVault.abi.json', 'utf8'));
-  const vaultBytecode = fs.readFileSync('build/SubBotVault.bytecode.txt', 'utf8').trim();
+  // ── Deploy SubBotCredits ─────────────────────────────────────────────────
+  if (target === 'SubBotCredits') {
+    const creditsABI      = JSON.parse(fs.readFileSync('build/SubBotCredits.abi.json', 'utf8'));
+    const creditsBytecode = fs.readFileSync('build/SubBotCredits.bytecode.txt', 'utf8').trim();
 
-  // agent = deployer wallet (will sign vault transactions)
-  const { address: vaultAddress } = await deployContract(
-    'SubBotVault', vaultABI, vaultBytecode, wallet, wallet.address
-  );
+    // constructor(address _agent) — agent = deployer wallet
+    const { address: creditsAddress } = await deployContract(
+      'SubBotCredits', creditsABI, creditsBytecode, wallet, wallet.address
+    );
 
-  console.log(`\nNo reserve seeding needed — yield comes from Aave v3 borrowers.`);
-  console.log(`Users deposit cUSD → vault supplies to Aave → real yield accrues automatically.`);
+    // Save address to .env
+    const envFile = path.join(__dirname, '.env');
+    let env = fs.readFileSync(envFile, 'utf8');
+    env = env.replace(/LOG_CONTRACT_ADDRESS=.*/, `LOG_CONTRACT_ADDRESS=${logAddress}`);
+    if (env.includes('CREDITS_CONTRACT_ADDRESS=')) {
+      env = env.replace(/CREDITS_CONTRACT_ADDRESS=.*/, `CREDITS_CONTRACT_ADDRESS=${creditsAddress}`);
+    } else {
+      env += `\nCREDITS_CONTRACT_ADDRESS=${creditsAddress}\n`;
+    }
+    fs.writeFileSync(envFile, env);
 
-  // ── Save addresses to .env ───────────────────────────────────────────────
-  const envFile = path.join(__dirname, '.env');
-  let env = fs.readFileSync(envFile, 'utf8');
-  env = env.replace(/LOG_CONTRACT_ADDRESS=.*/, `LOG_CONTRACT_ADDRESS=${logAddress}`);
-  if (env.includes('VAULT_CONTRACT_ADDRESS=')) {
-    env = env.replace(/VAULT_CONTRACT_ADDRESS=.*/, `VAULT_CONTRACT_ADDRESS=${vaultAddress}`);
-  } else {
-    env += `\nVAULT_CONTRACT_ADDRESS=${vaultAddress}\n`;
+    console.log(`\n✅ SubBotCredits deployed. Address saved to .env`);
+    console.log(`G$ token: 0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A`);
+    console.log(`\nRestart api-bridge.js to activate credits endpoints:`);
+    console.log(`   node api-bridge.js`);
   }
-  fs.writeFileSync(envFile, env);
-
-  console.log(`\n✅ All done. Addresses saved to .env`);
-  console.log(`\nRestart api-bridge.js to activate vault endpoints:`);
-  console.log(`   node api-bridge.js`);
 }
 
 main().catch(e => { console.error(e.message); process.exit(1); });
