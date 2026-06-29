@@ -404,9 +404,8 @@
           <div class="flex-1 min-w-0"><p class="text-sm font-bold text-main">Scan Inbox</p><p id="settings-email-display" class="text-xs text-muted truncate">Not configured</p></div>
         </div>
         <input id="settings-email" type="email" placeholder="you@gmail.com" class="w-full bg-field border border-edge rounded-lg py-2.5 px-3.5 text-xs text-main focus:outline-none focus:border-primary"/>
-        <input id="settings-password" type="password" placeholder="Google App Password" class="w-full bg-field border border-edge rounded-lg py-2.5 px-3.5 text-xs font-mono text-main focus:outline-none focus:border-primary"/>
-        <p class="text-[10px] text-muted"><i class="fa-solid fa-circle-info text-muted mr-1"></i>Need an App Password? <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener" class="text-primary hover:underline font-semibold">Create one here</a> (requires 2FA enabled)</p>
-        <button data-action="scanGmail" class="w-full py-2.5 rounded-lg bg-primary text-white text-xs font-bold active:scale-95 flex items-center justify-center gap-2 transition-transform shadow-sm">
+        <p class="text-[10px] text-muted"><i class="fa-solid fa-lock text-[8px] mr-1"></i>App password is entered per-scan and never stored.</p>
+        <button data-action="showGmailModal" class="w-full py-2.5 rounded-lg bg-primary text-white text-xs font-bold active:scale-95 flex items-center justify-center gap-2 transition-transform shadow-sm">
           <i class="fa-solid fa-magnifying-glass text-xs"></i> Run Inbox Scanner
         </button>
       </div>

@@ -1636,11 +1636,10 @@ async function shareApp() {
 
 // ── Gmail Scan ───────────────────────────────────────────────────────────
 function prefillGmailModal() {
-  // Pre-fill from settings inputs if available
+  // Pre-fill email only — password is never stored, entered fresh per scan
   const se = document.getElementById('settings-email')?.value;
-  const sp = document.getElementById('settings-password')?.value;
   if (se) document.getElementById('gmail-scan-email').value = se;
-  if (sp) document.getElementById('gmail-scan-password').value = sp;
+  document.getElementById('gmail-scan-password').value = '';
 }
 
 async function runGmailScan() {
@@ -1677,11 +1676,9 @@ async function runGmailScan() {
     if (document.getElementById('settings-email')) document.getElementById('settings-email').value = email;
     const emailDisp = document.getElementById('settings-email-display');
     if (emailDisp) emailDisp.textContent = email;
-    // Clear password fields — never keep in DOM
+    // Clear password from scan modal — never keep in DOM
     const scanPwField = document.getElementById('gmail-scan-password');
     if (scanPwField) scanPwField.value = '';
-    const settingsPwField = document.getElementById('settings-password');
-    if (settingsPwField) settingsPwField.value = '';
 
     document.getElementById('modal-gmail-scan')?.classList.remove('active');
 
@@ -1696,14 +1693,9 @@ async function runGmailScan() {
 }
 
 async function runSettingsGmailScan() {
-  const email    = document.getElementById('settings-email')?.value?.trim();
-  const password = document.getElementById('settings-password')?.value?.trim();
-  if (!email || !password) { toast('Enter email and App Password first'); return; }
-
-  // Copy to modal and run
-  document.getElementById('gmail-scan-email').value = email;
-  document.getElementById('gmail-scan-password').value = password;
-  await runGmailScan();
+  // Open the scan modal — password is always entered there, never stored in settings
+  document.getElementById('modal-gmail-scan')?.classList.add('active');
+  prefillGmailModal();
 }
 
 // ── Theme Toggle ─────────────────────────────────────────────────────────
