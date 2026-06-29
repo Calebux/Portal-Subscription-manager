@@ -4,7 +4,7 @@
  * Run: node swap-celo-for-cusd.js [celo_amount]
  * Default: swaps 0.5 CELO
  *
- * After this, run: node fund-reserve.js
+ * After this, the cUSD is available in your agent wallet.
  */
 
 require('./load-env');
@@ -75,7 +75,7 @@ async function main() {
   console.log(`  Tx: ${receipt.hash}`);
   console.log(`\n✅ Received: ${ethers.formatEther(received)} cUSD`);
   console.log(`   cUSD balance: ${ethers.formatEther(cusdAfter)} cUSD`);
-  console.log('\nNow run: node fund-reserve.js');
+  console.log('\nDone — cUSD is now in your agent wallet.');
 }
 
 main().catch(e => { console.error(e.message); process.exit(1); });

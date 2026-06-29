@@ -112,15 +112,15 @@ Works natively with **MiniPay** (Opera Mini's built-in wallet). Multi-currency s
   9:05am daily ───► │  agent-digest.py    (LLM loop)    │
   Mon 8:00am  ───► │  llm-analyze.py     (LLM audit)   │
                     └──────────────┬───────────────────┘
-                                   │ decisions + vault ops
+                                   │ decisions + credits ops
                                    ▼
                     ┌─────────────────────────────────┐
                     │   CELO MAINNET                    │
                     │                                   │
-                    │   SubBotVault.sol                 │
-                    │   — G$ UBI balance (daily claims) │
-                    │   — cUSD → Aave v3 yield          │
-                    │   — agent spends from yield only  │
+                    │   SubBotCredits.sol               │
+                    │   — G$ deposit / withdraw         │
+                    │   — agent spends from credits     │
+                    │   — user withdraws anytime        │
                     │                                   │
                     │   SubBotLog.sol                   │
                     │   — immutable decision log        │
@@ -201,7 +201,7 @@ OPENAI_BASE_URL=https://inference-api.nousresearch.com/v1
 # Configure .env
 AGENT_PRIVATE_KEY=0x...
 LOG_CONTRACT_ADDRESS=0x5bc06976e5b46fd624195EFdD0bFC45a73569003
-VAULT_CONTRACT_ADDRESS=0x48720eeDdCc1Cf3B2C613Dc093869a2332841e62
+CREDITS_CONTRACT_ADDRESS=0xdF61E8D2a22e456a87998Ab78d00E57d099660e8
 
 # Start
 node api-bridge.js        # Terminal 1 — API bridge
@@ -225,11 +225,10 @@ ssh root@your-server "bash ~/deploy-vps.sh"
 | `llm-analyze.py` | LLM portfolio reasoning — contextual judgment over subscriptions |
 | `negotiate.py` | LLM negotiation emails with real user leverage |
 | `contracts/SubBotLog.sol` | On-chain decision audit trail (Celo) |
-| `contracts/SubBotVault.sol` | G$/cUSD vault with Aave v3 yield |
-| `contracts/SubBotGoodDollar.sol` | GoodDollar claim adapter |
+| `contracts/SubBotCredits.sol` | G$ credit system — deposit, spend, withdraw |
 | `subscription-alerts.py` | Renewal daemon — alerts 3 and 1 day before charges |
 | `gmail-scanner.py` | IMAP scanner — 50+ billing patterns |
-| `api-bridge.js` | Node.js bridge — auth, Celo logging, vault ops, serves PWA |
+| `api-bridge.js` | Node.js bridge — auth, Celo logging, credits ops, serves PWA |
 | `public/` | Web dashboard — PWA, light/dark theme, Web3Auth, MiniPay-ready |
 | `extension/` | Chrome extension — same UI, offline-capable |
 | `deploy-vps.sh` | One-command VPS deployment with systemd |
