@@ -1,4 +1,4 @@
-const CACHE_NAME = 'subbot-v10';
+const CACHE_NAME = 'subbot-v11';
 const SHELL_ASSETS = [
   '/',
   '/index.html',
