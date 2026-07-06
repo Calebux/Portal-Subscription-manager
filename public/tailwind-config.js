@@ -24,11 +24,11 @@ tailwind.config = {
         "mono": ["JetBrains Mono", "monospace"]
       },
       borderRadius: {
-        "DEFAULT": "0.125rem",
-        "lg": "0.375rem",
-        "xl": "0.625rem",
-        "2xl": "0.875rem",
-        "3xl": "1.25rem",
+        "DEFAULT": "0.375rem",
+        "lg": "0.75rem",
+        "xl": "1rem",
+        "2xl": "1.25rem",
+        "3xl": "1.75rem",
         "full": "9999px"
       }
     }

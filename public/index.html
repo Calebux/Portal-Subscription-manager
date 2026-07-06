@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png"/>
 <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
 <link rel="manifest" href="manifest.json"/>
-<meta name="theme-color" content="#171717"/>
+<meta name="theme-color" content="#0f1510"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
 <meta name="apple-mobile-web-app-title" content="SubBot"/>
@@ -20,34 +20,34 @@
 <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js" defer></script>
 <style>
   :root {
-    --bg-page: #f4f4f5;
+    --bg-page: #f0faf4;
     --bg-app: #ffffff;
     --bg-header: rgba(255, 255, 255, 0.85);
     --bg-nav: rgba(255, 255, 255, 0.95);
-    --bg-card: #f9fafb;
-    --bg-card-hover: #f3f4f6;
-    --bg-input: #f3f4f6;
-    --text-main: #0f172a;
-    --text-muted: #64748b;
-    --border-color: #cbd5e1;
-    --accent: #0e7490; /* cyan-700 for better contrast on white */
-    --accent-glow: rgba(14, 116, 144, 0.12);
-    --scrollbar-thumb: #cbd5e1;
+    --bg-card: #f0fdf4;
+    --bg-card-hover: #dcfce7;
+    --bg-input: #f0fdf4;
+    --text-main: #052e16;
+    --text-muted: #4d7c5e;
+    --border-color: #bbf7d0;
+    --accent: #059669;
+    --accent-glow: rgba(5, 150, 105, 0.12);
+    --scrollbar-thumb: #bbf7d0;
   }
   html.dark {
-    --bg-page: #121212;
-    --bg-app: #171717;
-    --bg-header: rgba(23, 23, 23, 0.85);
-    --bg-nav: rgba(23, 23, 23, 0.95);
-    --bg-card: #212121;
-    --bg-card-hover: #2f2f2f;
-    --bg-input: #2f2f2f;
-    --text-main: #ececf1;
-    --text-muted: #8e8ea0;
-    --border-color: #383838;
-    --accent: #22d3ee; /* cyan-400 for glowing dark-mode contrast */
-    --accent-glow: rgba(34, 211, 238, 0.25);
-    --scrollbar-thumb: #424242;
+    --bg-page: #0a0f0a;
+    --bg-app: #0f1510;
+    --bg-header: rgba(15, 21, 16, 0.88);
+    --bg-nav: rgba(15, 21, 16, 0.96);
+    --bg-card: #182518;
+    --bg-card-hover: #1f301f;
+    --bg-input: #1a2b1a;
+    --text-main: #e2f0e8;
+    --text-muted: #6b9a7a;
+    --border-color: #254025;
+    --accent: #34d399;
+    --accent-glow: rgba(52, 211, 153, 0.2);
+    --scrollbar-thumb: #2d4a2d;
   }
 
   html { color-scheme: light; }
@@ -67,16 +67,16 @@
   .pulse-dot { animation:pulse-anim 2s cubic-bezier(0.4,0,0.6,1) infinite; }
   @keyframes pulse-anim { 0%,100%{opacity:1;transform:scale(1);}50%{opacity:.5;transform:scale(1.2);} }
   .logo-glow { filter:drop-shadow(0 0 18px var(--accent-glow)); }
-  .signature-glow { background:linear-gradient(135deg,#06b6d4 0%,#0891b2 100%); color:#ffffff; box-shadow:0 0 25px var(--accent-glow); }
-  html.dark .signature-glow { background:linear-gradient(135deg,#22d3ee 0%,#06b6d4 100%); color:#020617; }
+  .signature-glow { background:linear-gradient(135deg,#10b981 0%,#059669 100%); color:#ffffff; box-shadow:0 0 25px var(--accent-glow); }
+  html.dark .signature-glow { background:linear-gradient(135deg,#34d399 0%,#10b981 100%); color:#052e16; }
   
   #toast { position:absolute; bottom:80px; left:50%; transform:translateX(-50%) translateY(20px); background: var(--bg-card); border:1px solid var(--border-color); color: var(--text-main); padding:8px 16px; border-radius:999px; font-size:12px; font-weight:600; opacity:0; transition:all 0.3s; pointer-events:none; z-index:200; white-space:nowrap; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.2); }
   #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
   .modal-overlay { display:none; position:absolute; inset:0; z-index:100; background:rgba(0,0,0,0.7); backdrop-filter:blur(6px); align-items:flex-end; justify-content:center; padding:16px; }
   .modal-overlay.active { display:flex; }
   
-  .nav-tab { display:flex; flex-direction:column; align-items:center; justify-content:center; color: var(--text-muted); cursor:pointer; padding:4px 8px; border-radius:12px; transition:all 0.15s; }
-  .nav-tab.active-tab { color: var(--accent); background: var(--accent-glow); font-weight:600; }
+  .nav-tab { display:flex; flex-direction:column; align-items:center; justify-content:center; color: var(--text-muted); cursor:pointer; padding:5px 12px; border-radius:14px; transition:all 0.2s; }
+  .nav-tab.active-tab { color: var(--accent); background: var(--accent-glow); font-weight:700; transform: translateY(-1px); }
   .nav-tab span.label { font-size:10px; text-transform:uppercase; letter-spacing:0.08em; margin-top:3px; }
   
   @media (min-width:480px) {
