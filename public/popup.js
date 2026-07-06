@@ -744,7 +744,7 @@ async function openWeb3AuthModal() {
     state.userId = address ? `w3a:${payload.verifier}:${address}` : `w3a:${payload.verifier}:${payload.verifierId}`;
     saveState();
 
-    track('login', { method: payload.verifier || 'web3auth' });
+    track('login', { method: payload.verifier || 'web3auth', email: info.email || '', userId: state.userId });
     const gotData = await fetchUserData(false);
     showScreen('dashboard');
     if (gotData) {
@@ -1010,6 +1010,7 @@ async function fetchUserData(silent = true) {
           return s;
         });
         gotData = true;
+        track('subs_loaded', { userId: state.userId, count: state.subscriptions.length });
       }
       if (d.monthly_budget != null) state.budget = d.monthly_budget;
       if (d.budget_currency) state.budgetCurrency = d.budget_currency;
