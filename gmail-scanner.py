@@ -26,6 +26,9 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Optional
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import sub_store
+
 # ── Config ────────────────────────────────────────────────────────────────────
 LOOKBACK_DAYS = 120
 HERMES_MEMORY_DIR = Path.home() / ".hermes" / "memory"
@@ -53,6 +56,18 @@ EXCLUSION_SIGNALS = [
     "payment failed", "payment unsuccessful", "was unsuccessful",
     "failed to process", "payment issue", "payment declined",
     "could not process", "unable to process",
+]
+
+TRIAL_SIGNALS = [
+    "free trial", "trial period", "trial ends", "trial expires",
+    "days free", "day free trial", "your trial", "trial has started",
+    "trial begins", "start your trial",
+]
+
+TRIAL_LENGTH_PATTERNS = [
+    r"(\d+)[- ]days?\s+(?:of\s+)?(?:your\s+)?(?:free\s+)?trial",
+    r"trial\s+(?:for\s+|of\s+)?(\d+)\s+days?",
+    r"(\d+)[- ]day\s+free\s+trial",
 ]
 
 CANCELLATION_SIGNALS = [
@@ -190,6 +205,32 @@ def extract_currency(text: str) -> str:
         if re.search(symbol, text):
             return code
     return "USD"
+
+
+def extract_trial_info(text: str, signup_date: str) -> tuple[bool, Optional[str]]:
+    """Returns (is_trial, trial_ends) if the text mentions a free trial.
+    trial_ends defaults to 7 days out when a length isn't stated explicitly."""
+    is_trial = any(s in text for s in TRIAL_SIGNALS)
+    if not is_trial:
+        return False, None
+
+    trial_days = 7
+    for pattern in TRIAL_LENGTH_PATTERNS:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            try:
+                trial_days = int(match.group(1))
+                break
+            except ValueError:
+                continue
+
+    try:
+        start = datetime.strptime(signup_date, "%Y-%m-%d")
+        trial_ends = (start + timedelta(days=trial_days)).strftime("%Y-%m-%d")
+    except Exception:
+        trial_ends = None
+
+    return True, trial_ends
 
 
 def extract_merchant(from_header: str) -> str:
@@ -339,6 +380,8 @@ def to_hermes_subscription(record: dict) -> dict:
         "health_score": 70,
         "notes": f"Auto-detected from email: {record.get('subject', '')[:80]}",
         "source": "gmail-scan",
+        "is_trial": record.get("is_trial", False),
+        "trial_ends": record.get("trial_ends"),
     }
 
 
@@ -412,12 +455,13 @@ def scan_gmail(email_addr: str, app_password: str, progress_fn=None) -> list[dic
             amount = extract_amount(f"{subject} {body}")
             merchant = extract_merchant(from_header)
             is_known = any(k in from_header.lower() for k in KNOWN_SERVICES)
+            is_trial, trial_ends = extract_trial_info(combined, date_str)
 
             if not is_cancelled:
-                if not amount or amount <= 0:
+                if not is_trial and (not amount or amount <= 0):
                     continue
-                # Known services skip the signal check — we already know they're subscriptions
-                if not is_known and not any(s in combined for s in SUBSCRIPTION_SIGNALS):
+                # Known services and trial signups skip the signal check
+                if not is_known and not is_trial and not any(s in combined for s in SUBSCRIPTION_SIGNALS):
                     continue
                 if any(s in combined for s in EXCLUSION_SIGNALS):
                     continue
@@ -437,6 +481,8 @@ def scan_gmail(email_addr: str, app_password: str, progress_fn=None) -> list[dic
                     "date": date_str,
                     "subject": subject[:200],
                     "status": status,
+                    "is_trial": is_trial,
+                    "trial_ends": trial_ends,
                 }
 
             if progress_fn:
@@ -511,22 +557,18 @@ def main():
     all_records = refine_with_llm(all_records)
 
     hermes_subs = [to_hermes_subscription(r) for r in all_records]
+    cancelled_subs = [to_hermes_subscription(r) for r in all_cancelled]
 
-    # Save to per-user file for the skill to load
-    out_dir = Path.home() / ".hermes" / "user-data" / user_id
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_file = out_dir / "scanned-subscriptions.json"
-
-    db = {
-        "subscriptions": hermes_subs,
-        "cancellation_history": [to_hermes_subscription(r) for r in all_cancelled],
-        "last_audit": datetime.now().strftime("%Y-%m-%d"),
-        "scanned_from": scanned_emails,
-        "monthly_budget": None,
-    }
-
-    with open(out_file, "w") as f:
-        json.dump(db, f, indent=2)
+    # Merge into the existing per-user store instead of overwriting it —
+    # preserves subs from other sources (CSV import, manual add) and any
+    # user edits (status, health_score, use_case, notes), and tracks
+    # price_history when a merchant's cost changed since the last scan.
+    db = sub_store.merge_all(
+        user_id, hermes_subs,
+        scanned_from=scanned_emails,
+        cancelled_records=cancelled_subs,
+    )
+    out_file = sub_store.USER_DATA_DIR / user_id / "scanned-subscriptions.json"
 
     print(f"\nSaved {len(hermes_subs)} subscriptions to {out_file}")
 

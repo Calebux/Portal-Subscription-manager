@@ -56,7 +56,7 @@ const CUSD_ADDR   = '0x765DE816845861e75A25fCA122bb6898B8B1282a'; // cUSD mainne
 
 
 app.use(cors({ origin: '*' }));
-app.use(express.json());
+app.use(express.json({ limit: '5mb' })); // statement CSV uploads can be a few hundred KB of text
 // No-cache for sw.js so updates propagate immediately
 app.get('/sw.js', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -71,6 +71,16 @@ function userDir(userId = 'local') {
   const d = path.join(USER_DATA, userId);
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
   return d;
+}
+
+// Single source of truth shared with subscription-alerts.py / statement-scanner.py
+const CANCEL_URLS = readJSON(path.join(__dirname, 'cancel-urls.json')) || {};
+
+function getCancelUrl(name = '') {
+  const match = CANCEL_URLS[name.toLowerCase()];
+  if (match) return match;
+  const query = encodeURIComponent(`how to cancel ${name} subscription`);
+  return `https://www.google.com/search?q=${query}`;
 }
 
 function readJSON(file) {
@@ -256,8 +266,9 @@ app.post('/sync', (req, res) => {
 app.get('/subs', (req, res) => {
   const userId = req.query.userId || 'local';
   const file   = path.join(userDir(userId), 'scanned-subscriptions.json');
-  const data   = readJSON(file);
-  res.json(data || { subscriptions: [], cancellation_history: [], monthly_budget: null });
+  const data   = readJSON(file) || { subscriptions: [], cancellation_history: [], monthly_budget: null };
+  data.subscriptions = (data.subscriptions || []).map(s => ({ ...s, cancel_url: getCancelUrl(s.name) }));
+  res.json(data);
 });
 
 // Add a single subscription (from extension manual add)
@@ -326,6 +337,35 @@ app.post('/scan', async (req, res) => {
     // Sanitize error — never leak credentials
     const safeError = (e.error || 'Scan failed').replace(/[^\s]{16,}/g, '***');
     res.status(500).json({ error: safeError });
+  }
+});
+
+// Import a bank/card statement CSV — detects recurring charges Gmail never sees a receipt for
+app.post('/import-statement', async (req, res) => {
+  const { csvText, userId = 'local' } = req.body;
+  if (!csvText) return res.status(400).json({ error: 'csvText required' });
+  try {
+    const out = await new Promise((resolve, reject) => {
+      const child = spawn('python3', [
+        path.join(HERMES_HOME, 'statement-scanner.py'),
+        '--user-id', userId,
+      ], { timeout: 60000 });
+      child.stdin.write(csvText);
+      child.stdin.end();
+      let stdout = '', stderr = '';
+      child.stdout.on('data', d => stdout += d);
+      child.stderr.on('data', d => stderr += d);
+      child.on('close', code => {
+        if (code !== 0) reject({ error: stderr || `exit code ${code}` });
+        else resolve(stdout);
+      });
+      child.on('error', err => reject({ error: err.message }));
+    });
+    const file = path.join(userDir(userId), 'scanned-subscriptions.json');
+    const data = readJSON(file);
+    res.json(data || { subscriptions: [] });
+  } catch(e) {
+    res.status(500).json({ error: e.error || 'Statement import failed' });
   }
 });
 

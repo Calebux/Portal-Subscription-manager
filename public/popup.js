@@ -974,6 +974,10 @@ document.addEventListener('click', e => {
     case 'shareApp':         shareApp(); break;
     case 'showGmailModal':   document.getElementById('modal-gmail-scan')?.classList.add('active'); prefillGmailModal(); track('action', { action: 'open_gmail_scan' }); break;
     case 'runGmailScan':     runGmailScan(); track('action', { action: 'run_gmail_scan' }); break;
+    case 'showCsvImportModal': document.getElementById('modal-csv-import')?.classList.add('active'); track('action', { action: 'open_csv_import' }); break;
+    case 'pickCsvFile':      document.getElementById('csv-import-file')?.click(); break;
+    case 'runStatementImport': runStatementImport(); track('action', { action: 'run_statement_import' }); break;
+    case 'cancelSubscription': window.open(el.dataset.url, '_blank', 'noopener'); track('action', { action: 'cancel_subscription' }); break;
     case 'scanGmail':        runSettingsGmailScan(); break;
     case 'depositCredits':   depositToCredits(); track('action', { action: 'deposit_credits' }); break;
     case 'withdrawCredits':  withdrawCredits(); track('action', { action: 'withdraw_credits' }); break;
@@ -1187,6 +1191,8 @@ function renderSubs() {
         <div class="flex items-center gap-2 mt-0.5">
           <span class="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-secondary/10 text-secondary">${s.category || 'SaaS'}</span>
           <span class="${hColor} text-[10px] font-mono">♥ ${health}</span>
+          ${s.is_trial && s.trial_ends ? `<span class="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-500 font-bold">TRIAL — ends ${new Date(s.trial_ends).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>` : ''}
+          ${!s.is_trial && s.price_changed_at ? `<span class="text-[9px] px-1.5 py-0.5 rounded-full bg-sky-500/10 text-sky-500 font-bold">Price changed</span>` : ''}
           ${s.next_renewal ? `<span class="text-[10px] text-muted ml-auto">Renew: ${new Date(s.next_renewal).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>` : ''}
         </div>
       </div>
@@ -1211,6 +1217,25 @@ function showSubDetail(id) {
   const hColor = health >= 80 ? 'text-tertiary' : health >= 50 ? 'text-amber-400' : 'text-error';
   const created = sub.created_at ? new Date(sub.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
   const renewal = sub.next_renewal ? new Date(sub.next_renewal).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+  const cancelUrl = sub.cancel_url || `https://www.google.com/search?q=${encodeURIComponent(`how to cancel ${sub.name} subscription`)}`;
+  const history = sub.price_history || [];
+
+  const trialBanner = sub.is_trial && sub.trial_ends
+    ? `<div class="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5 flex items-center gap-2">
+         <i class="fa-solid fa-hourglass-half text-amber-500 text-sm"></i>
+         <p class="text-xs text-amber-600 dark:text-amber-400 font-semibold">Free trial ends ${new Date(sub.trial_ends).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — you'll be charged ${sym}${cost}/mo after that</p>
+       </div>`
+    : '';
+
+  const priceHistoryBlock = history.length
+    ? `<div class="bg-panel rounded-lg p-2.5">
+         <p class="text-[10px] text-muted uppercase tracking-wider mb-1.5">Price History</p>
+         <div class="space-y-1">
+           ${history.map(h => `<div class="flex justify-between text-xs"><span class="text-muted">${h.date}</span><span class="font-mono">${cSym(h.currency)}${h.amount}/mo</span></div>`).join('')}
+           <div class="flex justify-between text-xs font-semibold"><span class="text-muted">Now</span><span class="font-mono text-main">${sym}${cost}/mo</span></div>
+         </div>
+       </div>`
+    : '';
 
   content.innerHTML = `
     <div class="flex items-center gap-3 mb-2">
@@ -1220,6 +1245,7 @@ function showSubDetail(id) {
         <p class="text-xs text-muted">${sub.provider || sub.name}</p>
       </div>
     </div>
+    ${trialBanner}
     <div class="grid grid-cols-2 gap-2">
       <div class="bg-panel rounded-lg p-2.5"><p class="text-[10px] text-muted uppercase tracking-wider">Cost</p><p class="text-sm font-bold font-mono">${sym}${cost}/mo</p></div>
       <div class="bg-panel rounded-lg p-2.5"><p class="text-[10px] text-muted uppercase tracking-wider">Category</p><p class="text-sm font-semibold capitalize">${sub.category || 'Other'}</p></div>
@@ -1227,6 +1253,11 @@ function showSubDetail(id) {
       <div class="bg-panel rounded-lg p-2.5"><p class="text-[10px] text-muted uppercase tracking-wider">Health</p><p class="text-sm font-bold font-mono ${hColor}">♥ ${health}/100</p></div>
       <div class="bg-panel rounded-lg p-2.5"><p class="text-[10px] text-muted uppercase tracking-wider">Currency</p><p class="text-sm font-mono">${sub.currency || 'USD'}</p></div>
       <div class="bg-panel rounded-lg p-2.5"><p class="text-[10px] text-muted uppercase tracking-wider">Added</p><p class="text-sm font-mono">${created}</p></div>
+    </div>
+    ${priceHistoryBlock}
+    <div class="flex gap-2">
+      <button data-action="draftEmail" data-service="${sub.name}" class="flex-1 py-2.5 rounded-xl border border-edge bg-panel hover:bg-panel-hover text-main text-xs font-bold flex items-center justify-center gap-1.5 transition-all"><i class="fa-solid fa-envelope-open-text text-xs"></i> Negotiate</button>
+      <button data-action="cancelSubscription" data-url="${cancelUrl}" class="flex-1 py-2.5 rounded-xl border border-error/30 bg-error/5 hover:bg-error/10 text-error text-xs font-bold flex items-center justify-center gap-1.5 transition-all"><i class="fa-solid fa-ban text-xs"></i> Cancel Subscription</button>
     </div>`;
   document.getElementById('modal-sub-detail')?.classList.add('active');
 }
@@ -1720,6 +1751,53 @@ async function runSettingsGmailScan() {
   // Open the scan modal — password is always entered there, never stored in settings
   document.getElementById('modal-gmail-scan')?.classList.add('active');
   prefillGmailModal();
+}
+
+// ── Bank/Card Statement Import ───────────────────────────────────────────
+document.getElementById('csv-import-file')?.addEventListener('change', () => {
+  const file = document.getElementById('csv-import-file').files?.[0];
+  const label = document.getElementById('csv-import-filename');
+  if (label) label.textContent = file ? file.name : 'No file selected';
+});
+
+async function runStatementImport() {
+  const fileInput = document.getElementById('csv-import-file');
+  const file = fileInput?.files?.[0];
+  if (!file) { toast('Choose a CSV file first'); return; }
+
+  const paid = await payForAction('scan');
+  if (!paid) return;
+
+  const btn = document.querySelector('[data-action="runStatementImport"]');
+  const origText = btn?.innerHTML;
+  if (btn) { btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-sm"></i> Importing…'; btn.disabled = true; }
+
+  try {
+    const csvText = await file.text();
+    const beforeCount = state.subscriptions.length;
+    const r = await fetch(`${API}/import-statement`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ csvText, userId: userId() }),
+      signal: AbortSignal.timeout(60000),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Import failed');
+
+    document.getElementById('modal-csv-import')?.classList.remove('active');
+    fileInput.value = '';
+    const label = document.getElementById('csv-import-filename');
+    if (label) label.textContent = 'No file selected';
+
+    await refreshData();
+    const added = state.subscriptions.length - beforeCount;
+    toast(added > 0 ? `Found ${added} recurring charge${added === 1 ? '' : 's'} in your statement` : 'No new recurring charges detected');
+  } catch (err) {
+    console.error('Statement import error:', err);
+    toast('Import failed — check the file and try again');
+  } finally {
+    if (btn) { btn.innerHTML = origText; btn.disabled = false; }
+  }
 }
 
 // ── Theme Toggle ─────────────────────────────────────────────────────────

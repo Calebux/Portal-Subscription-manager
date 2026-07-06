@@ -8,7 +8,9 @@ LOG_DIR="$HERMES_HOME/logs"
 mkdir -p "$LOG_DIR"
 
 # Copy scripts to hermes home (where crons expect them)
-cp llm-analyze.py agent-digest.py negotiate.py subscription-alerts.py "$HERMES_HOME/"
+cp llm-analyze.py agent-digest.py negotiate.py subscription-alerts.py \
+   gmail-scanner.py statement-scanner.py sub_store.py currency.py cancel-urls.json \
+   "$HERMES_HOME/"
 
 # Install cron jobs
 crontab -l 2>/dev/null | grep -v "hermes" | {
