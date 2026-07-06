@@ -185,11 +185,16 @@
       <div class="bg-panel p-3 rounded-xl border border-edge flex flex-col items-center text-center"><span id="stat-annual" class="text-lg font-bold font-mono text-sky-500">$0</span><span class="text-[10px] font-bold uppercase tracking-wider text-muted mt-0.5">annual</span></div>
       <div class="bg-panel p-3 rounded-xl border border-edge flex flex-col items-center text-center"><span id="stat-renewals" class="text-lg font-bold font-mono text-emerald-500">0</span><span class="text-[10px] font-bold uppercase tracking-wider text-muted mt-0.5">renewals</span></div>
     </div>
-    <!-- Wallet strip moved to credits screen -->
-    <div id="credits-strip" class="flex items-center justify-between px-4 py-3 bg-panel rounded-xl border border-edge">
+    <!-- [GOODDOLLAR_PAUSED_S2] Credits strip hidden during free beta -->
+    <!-- <div id="credits-strip" class="flex items-center justify-between px-4 py-3 bg-panel rounded-xl border border-edge">
       <div class="flex items-center gap-2"><i class="fa-solid fa-coins text-amber-500 text-lg"></i><span class="text-xs font-bold text-muted uppercase tracking-wider">Credits</span></div>
       <span id="strip-balance" class="text-sm font-mono font-bold text-main">— G$</span>
       <button data-action="nav" data-target="credits" class="text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1 rounded-lg active:scale-95 transition-colors">Top Up</button>
+    </div> -->
+    <div id="credits-strip" class="flex items-center justify-between px-4 py-3 bg-emerald-500/10 rounded-xl border border-emerald-500/30">
+      <div class="flex items-center gap-2"><i class="fa-solid fa-rocket text-emerald-500 text-lg"></i><span class="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Free Beta</span></div>
+      <span class="text-xs text-muted font-medium">All features unlocked</span>
+      <span class="text-xs font-bold bg-emerald-500 text-white px-3 py-1 rounded-lg">Active</span>
     </div>
     <div class="grid grid-cols-2 gap-3">
       <button data-action="showGmailModal" class="signature-glow font-bold py-3 rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-all shadow-md">
@@ -281,42 +286,30 @@
 <!-- SCREEN: CREDITS -->
 <div id="screen-credits" class="screen">
   <div class="screen-scroll pt-[52px] pb-[56px] px-4 space-y-5">
-    <!-- Credit Balance card -->
-    <div class="relative w-full rounded-2xl overflow-hidden gold-border p-5 flex flex-col justify-between amber-glow bg-gradient-to-br from-panel to-app border border-edge mt-3 shadow-xl" style="min-height:120px;">
+    <!-- [GOODDOLLAR_PAUSED_S2] Free Beta card — replaces G$ credit card -->
+    <div class="relative w-full rounded-2xl overflow-hidden p-5 flex flex-col justify-between bg-gradient-to-br from-emerald-500/10 to-panel border border-emerald-500/30 mt-3 shadow-xl" style="min-height:120px;">
       <div class="flex justify-between items-start">
         <div class="flex items-center gap-2">
-          <div class="w-8 h-8 rounded-full bg-amber-400/20 flex items-center justify-center">
-            <i class="fa-solid fa-coins text-amber-500 text-base"></i>
+          <div class="w-8 h-8 rounded-full bg-emerald-400/20 flex items-center justify-center">
+            <i class="fa-solid fa-rocket text-emerald-500 text-base"></i>
           </div>
-          <span class="text-xs font-mono text-amber-500 uppercase tracking-widest font-bold">Celo Mainnet · G$</span>
+          <span class="text-xs font-mono text-emerald-500 uppercase tracking-widest font-bold">Free Beta · All Access</span>
         </div>
-        <div class="flex items-center gap-1.5 bg-panel/50 rounded-lg px-2 py-1">
-          <span class="text-[10px] text-muted font-bold">Ops left</span>
-          <span id="credits-ops-remaining" class="text-sm font-mono font-bold text-emerald-500">0</span>
-        </div>
+        <span class="text-[10px] font-bold bg-emerald-500 text-white px-2 py-1 rounded-lg">Active</span>
       </div>
-      <div class="mt-3">
-        <span class="text-[10px] text-muted uppercase tracking-widest font-bold">Credit Balance</span>
-        <div class="flex items-baseline gap-2"><h1 id="credits-contract-balance" class="text-3xl font-bold font-mono text-main leading-none">0.00</h1><span class="text-amber-500 font-mono font-bold">G$</span></div>
-        <span id="gd-wallet-balance" class="hidden">—</span>
-        <span id="credits-balance" class="hidden">0</span>
+      <div class="mt-4">
+        <h1 class="text-2xl font-bold font-mono text-main leading-none">Unlimited</h1>
+        <p class="text-xs text-muted mt-1">All scans, audits, exports &amp; negotiation emails are free during the launch month.</p>
       </div>
-      <div class="flex gap-2 mt-4">
-        <input id="credits-deposit-amount" type="number" min="0.01" step="0.01" placeholder="Amount G$" class="flex-1 bg-field border border-edge rounded-lg py-2 px-3 text-xs text-main font-mono focus:outline-none focus:border-primary"/>
-        <button data-action="depositCredits" class="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold active:scale-95 transition-all">Deposit</button>
-      </div>
-      <button data-action="withdrawCredits" class="w-full mt-2 py-2.5 rounded-xl border border-edge bg-panel/30 hover:bg-panel/50 text-main text-xs font-bold flex items-center justify-center gap-2 transition-all active:scale-95">
-        <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i> Withdraw All G$
-      </button>
-      <p class="text-[10px] text-muted mt-2">Deposit G$ to pre-pay for scans, audits, and exports. Withdraw anytime.</p>
-      <div id="wallet-strip" class="hidden flex items-center justify-between mt-3 pt-3 border-t border-edge/30">
-        <div class="flex items-center gap-1.5"><i class="fa-solid fa-link text-primary text-xs"></i><span class="text-[10px] font-bold text-muted">Wallet</span></div>
-        <span id="strip-wallet" class="text-[11px] font-mono text-main">—</span>
-        <button data-action="copyWallet" class="text-muted hover:text-main p-1" title="Copy"><i class="fa-regular fa-copy text-xs"></i></button>
-      </div>
+      <p class="text-[10px] text-muted mt-4">GoodDollar G$ payments return in Season 2 — stay tuned.</p>
+      <!-- Hidden elements kept for JS compatibility -->
+      <span id="gd-wallet-balance" class="hidden">—</span>
+      <span id="credits-balance" class="hidden">0</span>
+      <span id="credits-contract-balance" class="hidden">0</span>
+      <span id="credits-ops-remaining" class="hidden">0</span>
     </div>
 
-    <!-- Claim G$ -->
+    <!-- [GOODDOLLAR_PAUSED_S2] Claim G$ — hidden until Season 2
     <section>
       <div class="flex items-center gap-2 mb-3"><span class="w-1 h-3 bg-amber-500 rounded-full"></span><h2 class="text-xs font-bold uppercase tracking-widest text-muted">Claim G$</h2></div>
       <div class="rounded-2xl p-4 space-y-3 bg-panel border border-edge">
@@ -331,8 +324,14 @@
         <a id="gd-verify-link" href="#" class="hidden text-xs font-bold text-emerald-500 hover:underline inline-flex items-center gap-1">Start Face Verification <i class="fa-solid fa-arrow-right text-[10px]"></i></a>
       </div>
     </section>
+    -->
+    <!-- Stub elements for JS compatibility -->
+    <span id="gd-claimable" class="hidden"></span>
+    <div id="gd-status" class="hidden"></div>
+    <button id="gd-claim-btn" class="hidden"></button>
+    <a id="gd-verify-link" class="hidden"></a>
 
-    <!-- Cost per action -->
+    <!-- [GOODDOLLAR_PAUSED_S2] Cost per action — hidden until Season 2
     <section>
       <div class="flex items-center gap-2 mb-3"><span class="w-1 h-3 bg-primary rounded-full"></span><h2 class="text-xs font-bold uppercase tracking-widest text-muted">Cost Per Action</h2></div>
       <div class="bg-panel rounded-2xl overflow-hidden border border-edge">
@@ -346,6 +345,7 @@
         </div>
       </div>
     </section>
+    -->
 
     <!-- Usage history -->
     <section class="pb-4">

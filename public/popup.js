@@ -90,6 +90,9 @@ function faviconImg(sub, sizeClass = 'w-10 h-10') {
   return `<img src="${url}" alt="${sub.name}" class="${sizeClass} rounded-lg bg-panel object-contain" onerror="this.outerHTML='<div class=\\'${sizeClass} rounded-lg bg-panel flex items-center justify-center font-bold text-lg ${initBg}\\'>${sub.name.charAt(0)}</div>'"/>`;
 }
 
+// ── Feature flag: set to true when GoodDollar Season 2 opens ─────────────
+const ENABLE_GOODDOLLAR = false; // [GOODDOLLAR_PAUSED_S2]
+
 // ── GoodDollar contracts (Celo mainnet — from @goodsdks/citizen-sdk) ─────
 const GD_IDENTITY   = '0xC361A6E67822a0EDc17D899227dd9FC50BD62F42';
 const GD_UBISCHEME  = '0x43d72Ff17701B2DA814620735C39C620Ce0ea4A1';
@@ -129,6 +132,7 @@ async function ethCall(to, data, from) {
 
 // ── Pay-per-action: check backend credits → prompt deposit if needed ─────
 async function payForAction(action) {
+  if (!ENABLE_GOODDOLLAR) return true; // [GOODDOLLAR_PAUSED_S2] free beta
   const cost = ACTION_COSTS[action];
   if (!cost) return true; // free action
 
