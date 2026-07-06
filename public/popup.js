@@ -2,6 +2,24 @@
 
 const API            = 'https://subbotai.xyz';
 
+// ── Telemetry ─────────────────────────────────────────────────────────────
+const _SESSION_ID = (() => {
+  let id = sessionStorage.getItem('sb_sid');
+  if (!id) { id = Date.now().toString(36) + Math.random().toString(36).slice(2); sessionStorage.setItem('sb_sid', id); }
+  return id;
+})();
+function track(event, props = {}) {
+  try {
+    const pwa = window.matchMedia('(display-mode: standalone)').matches;
+    const theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+    fetch(`${API}/telemetry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event, session: _SESSION_ID, pwa, theme, ...props })
+    }).catch(() => {});
+  } catch (_) {}
+}
+
 // ── Web3Auth ──────────────────────────────────────────────────────────────────
 const W3A_CLIENT_ID = 'BCkzpmFTjh9pTHe7LGNlrg_jo22W7DNHGkkZSbgrQlOeSf7AzRZ1qdZXDRyxplEq5knOTiCjhH-uga6tpnASP1o';
 const CELO_CHAIN = {
@@ -726,6 +744,7 @@ async function openWeb3AuthModal() {
     state.userId = address ? `w3a:${payload.verifier}:${address}` : `w3a:${payload.verifier}:${payload.verifierId}`;
     saveState();
 
+    track('login', { method: payload.verifier || 'web3auth' });
     const gotData = await fetchUserData(false);
     showScreen('dashboard');
     if (gotData) {
@@ -910,6 +929,7 @@ function showScreen(name) {
   if (name === 'alerts')        renderAlerts();
   if (name === 'settings')      refreshSettings();
   if (name === 'audit')         runAudit(false);
+  track('screen_view', { screen: name });
 }
 
 // ── Event delegation ──────────────────────────────────────────────────────
@@ -930,11 +950,11 @@ document.addEventListener('click', e => {
   switch (action) {
     case 'nav':              showScreen(target); break;
     case 'refreshData':      refreshData(); break;
-    case 'addSub':           showAddSubModal(); break;
+    case 'addSub':           showAddSubModal(); track('action', { action: 'add_sub' }); break;
     case 'saveManualSub':    saveManualSub(); break;
     case 'filter':           if (filter) setFilter(filter); break;
     case 'saveBudget':       saveBudget(); break;
-    case 'exportAction':     exportCSV(); break;
+    case 'exportAction':     exportCSV(); track('action', { action: 'export_csv' }); break;
     case 'resetBot':         resetBot(); break;
     case 'closeModal':       if (modal) document.getElementById(modal)?.classList.remove('active'); break;
     case 'copyNeg':          copyNegotiationEmail(); break;
@@ -952,11 +972,11 @@ document.addEventListener('click', e => {
     case 'pwaInstall':       installPWA(); break;
     case 'pwaDismiss':       document.getElementById('pwa-install-banner')?.classList.add('hidden'); localStorage.setItem('pwa-dismissed', '1'); break;
     case 'shareApp':         shareApp(); break;
-    case 'showGmailModal':   document.getElementById('modal-gmail-scan')?.classList.add('active'); prefillGmailModal(); break;
-    case 'runGmailScan':     runGmailScan(); break;
+    case 'showGmailModal':   document.getElementById('modal-gmail-scan')?.classList.add('active'); prefillGmailModal(); track('action', { action: 'open_gmail_scan' }); break;
+    case 'runGmailScan':     runGmailScan(); track('action', { action: 'run_gmail_scan' }); break;
     case 'scanGmail':        runSettingsGmailScan(); break;
-    case 'depositCredits':   depositToCredits(); break;
-    case 'withdrawCredits':  withdrawCredits(); break;
+    case 'depositCredits':   depositToCredits(); track('action', { action: 'deposit_credits' }); break;
+    case 'withdrawCredits':  withdrawCredits(); track('action', { action: 'withdraw_credits' }); break;
     case 'togglePushNotifications': togglePushNotifications(); break;
     case 'confirmScanSubs':  confirmScanSubs(); break;
     case 'scanSelectAll':    document.querySelectorAll('#scan-results-list input[type="checkbox"]').forEach(cb => cb.checked = true); break;
@@ -1883,6 +1903,7 @@ function renderPushToggle() {
 // ── Init ──────────────────────────────────────────────────────────────────
 async function init() {
   applyTheme();
+  track('session_start');
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   }

@@ -668,6 +668,73 @@ app.post('/budget', (req, res) => {
   res.json({ ok: true, budget, budgetCurrency: data.budget_currency });
 });
 
+// ── Telemetry ──────────────────────────────────────────────────────────────
+const TELE_FILE = path.join(HERMES_HOME, 'telemetry.ndjson');
+const TELE_KEY  = process.env.TELEMETRY_KEY || 'subbot-admin-2024';
+const teleEvents = [];
+
+// Load last 5000 persisted events on startup
+try {
+  if (fs.existsSync(TELE_FILE)) {
+    const lines = fs.readFileSync(TELE_FILE, 'utf8').trim().split('\n').filter(Boolean);
+    lines.slice(-5000).forEach(l => { try { teleEvents.push(JSON.parse(l)); } catch (_) {} });
+    console.log(`[SubBot] Telemetry loaded: ${teleEvents.length} events`);
+  }
+} catch (_) {}
+
+app.post('/telemetry', (req, res) => {
+  const { event, screen, action, session, theme, pwa } = req.body || {};
+  if (!event) return res.status(400).json({ error: 'missing event' });
+  const entry = {
+    event, screen: screen || null, action: action || null,
+    session: session || 'anon', theme: theme || 'dark', pwa: !!pwa,
+    ua: (req.headers['user-agent'] || '').slice(0, 200),
+    ip: (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip,
+    ts: Date.now()
+  };
+  teleEvents.push(entry);
+  if (teleEvents.length > 10000) teleEvents.shift();
+  fs.appendFile(TELE_FILE, JSON.stringify(entry) + '\n', () => {});
+  res.json({ ok: true });
+});
+
+app.get('/telemetry/stats', (req, res) => {
+  if (req.query.key !== TELE_KEY) return res.status(401).json({ error: 'unauthorized' });
+  const now = Date.now();
+  const DAY = 86400000;
+  const e1d = teleEvents.filter(e => now - e.ts < DAY);
+  const e7d = teleEvents.filter(e => now - e.ts < 7 * DAY);
+
+  const countBy = (arr, fn) => {
+    const m = {};
+    arr.forEach(e => { const k = fn(e); if (k) m[k] = (m[k] || 0) + 1; });
+    return Object.entries(m).sort((a, b) => b[1] - a[1]).map(([k, count]) => ({ k, count }));
+  };
+
+  const daily = {};
+  e7d.forEach(e => {
+    const d = new Date(e.ts).toISOString().slice(0, 10);
+    if (!daily[d]) daily[d] = new Set();
+    daily[d].add(e.session);
+  });
+
+  res.json({
+    total_events: teleEvents.length,
+    sessions_today: new Set(e1d.map(e => e.session)).size,
+    sessions_7d: new Set(e7d.map(e => e.session)).size,
+    unique_ips_today: new Set(e1d.map(e => e.ip)).size,
+    top_screens: countBy(teleEvents.filter(e => e.event === 'screen_view'), e => e.screen),
+    top_actions: countBy(teleEvents.filter(e => e.event === 'action'), e => e.action),
+    logins_today: e1d.filter(e => e.event === 'login').length,
+    logins_7d: e7d.filter(e => e.event === 'login').length,
+    pwa_sessions: teleEvents.filter(e => e.pwa).length,
+    browser_sessions: teleEvents.filter(e => !e.pwa).length,
+    theme_dark: teleEvents.filter(e => e.theme === 'dark').length,
+    theme_light: teleEvents.filter(e => e.theme === 'light').length,
+    daily_sessions: Object.entries(daily).sort().map(([date, s]) => ({ date, sessions: s.size }))
+  });
+});
+
 // ── Start ──────────────────────────────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`[SubBot Bridge] Running at http://0.0.0.0:${PORT}`);
