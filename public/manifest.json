@@ -4,8 +4,8 @@
   "description": "Track, audit, and optimise your SaaS spend with AI.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a0e14",
-  "theme_color": "#10141a",
+  "background_color": "#111111",
+  "theme_color": "#111111",
   "orientation": "portrait",
   "icons": [
     {
