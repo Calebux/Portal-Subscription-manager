@@ -12,6 +12,8 @@ const { exec, spawn } = require('child_process');
 const fs      = require('fs');
 const path    = require('path');
 const https   = require('https');
+const crypto  = require('crypto');
+const { ethers } = require('ethers');
 
 // On-chain contracts (SubBotLog + SubBotCredits)
 let logContract    = null;
@@ -68,12 +70,18 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function userDir(userId = 'local') {
-  const d = path.join(USER_DATA, userId);
+  // userId flows into a filesystem path — strip anything that isn't part of
+  // the established w3a:/telegram-numeric formats to block path traversal.
+  const safe = String(userId).replace(/[^a-zA-Z0-9:_.\-]/g, '_');
+  const d = path.join(USER_DATA, safe);
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
   return d;
 }
 
-// Single source of truth shared with subscription-alerts.py / statement-scanner.py
+// ── Session auth (session-auth.js — extracted so it's unit-testable) ─────
+const { issueSessionToken, verifySessionToken, requireSession, requireInternalToken } = require('./session-auth');
+
+// Single source of truth shared with statement-scanner.py
 const CANCEL_URLS = readJSON(path.join(__dirname, 'cancel-urls.json')) || {};
 
 function getCancelUrl(name = '') {
@@ -89,7 +97,44 @@ function readJSON(file) {
 }
 
 function writeJSON(file, data) {
-  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+  // Write to a temp file then rename — rename is atomic on the same filesystem,
+  // so a reader never sees a half-written file if the process dies mid-write.
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+  fs.renameSync(tmp, file);
+}
+
+const LOCK_STALE_AFTER_MS = 10000;
+const LOCK_RETRY_MS       = 50;
+const LOCK_TIMEOUT_MS     = 3000;
+
+// Exclusive-create lockfile shared with sub_store.py's _file_lock — guards
+// read-modify-write endpoints against a Python scan/import process writing
+// the same user's file at the same moment.
+async function withFileLock(file, fn) {
+  const lockPath = `${file}.lock`;
+  const deadline = Date.now() + LOCK_TIMEOUT_MS;
+  for (;;) {
+    try {
+      fs.closeSync(fs.openSync(lockPath, 'wx'));
+      break;
+    } catch (e) {
+      if (e.code !== 'EEXIST') throw e;
+      try {
+        if (Date.now() - fs.statSync(lockPath).mtimeMs > LOCK_STALE_AFTER_MS) {
+          fs.unlinkSync(lockPath);
+          continue;
+        }
+      } catch (_) { continue; }
+      if (Date.now() > deadline) break; // proceed anyway rather than hang indefinitely
+      await new Promise(r => setTimeout(r, LOCK_RETRY_MS));
+    }
+  }
+  try {
+    return await fn();
+  } finally {
+    try { fs.unlinkSync(lockPath); } catch (_) {}
+  }
 }
 
 function runPy(cmd) {
@@ -236,7 +281,7 @@ app.post('/auth/verify-web3auth', async (req, res) => {
       writeJSON(metaFile, { ...existing, lastLoginAt: new Date().toISOString() });
     }
 
-    res.json({ ok: true, userId, email: payload.email || '', sub: payload.sub });
+    res.json({ ok: true, userId, email: payload.email || '', sub: payload.sub, sessionToken: issueSessionToken(userId) });
   } catch (err) {
     console.warn('[web3auth] JWT verification failed:', err.message);
     res.status(401).json({ error: 'Invalid Web3Auth token', detail: err.message });
@@ -244,7 +289,7 @@ app.post('/auth/verify-web3auth', async (req, res) => {
 });
 
 // GET /auth/me — returns Web3Auth profile for a verified userId
-app.get('/auth/me', (req, res) => {
+app.get('/auth/me', requireSession, (req, res) => {
   const { userId } = req.query;
   if (!userId || !userId.startsWith('w3a:')) return res.status(400).json({ error: 'w3a userId required' });
   const metaFile = path.join(userDir(userId), 'web3auth-meta.json');
@@ -253,8 +298,55 @@ app.get('/auth/me', (req, res) => {
   res.json(meta);
 });
 
+// ── Wallet-signature auth ─────────────────────────────────────────────────
+// External wallet logins (MetaMask, MiniPay) never get a Web3Auth idToken,
+// so they can't go through JWT verification — prove ownership with a
+// signed nonce instead, using the ethers.js already loaded for the contracts.
+const walletNonces = new Map(); // address (lowercase) → { nonce, expiresAt }
+const NONCE_TTL_MS = 5 * 60 * 1000;
+
+app.post('/auth/nonce', (req, res) => {
+  const address = String(req.body?.address || '').toLowerCase();
+  if (!/^0x[a-f0-9]{40}$/.test(address)) return res.status(400).json({ error: 'valid address required' });
+  const nonce = crypto.randomBytes(16).toString('hex');
+  walletNonces.set(address, { nonce, expiresAt: Date.now() + NONCE_TTL_MS });
+  res.json({ message: `Sign in to SubBot\n\nNonce: ${nonce}` });
+});
+
+app.post('/auth/verify-wallet', (req, res) => {
+  const address   = String(req.body?.address || '').toLowerCase();
+  const signature = req.body?.signature;
+  if (!address || !signature) return res.status(400).json({ error: 'address and signature required' });
+
+  const entry = walletNonces.get(address);
+  if (!entry || Date.now() > entry.expiresAt) {
+    return res.status(401).json({ error: 'Nonce missing or expired — request a new one via /auth/nonce' });
+  }
+  walletNonces.delete(address); // one-time use
+
+  const message = `Sign in to SubBot\n\nNonce: ${entry.nonce}`;
+  let recovered;
+  try {
+    recovered = ethers.verifyMessage(message, signature).toLowerCase();
+  } catch (e) {
+    return res.status(401).json({ error: 'Invalid signature' });
+  }
+  if (recovered !== address) return res.status(401).json({ error: 'Signature does not match address' });
+
+  const userId   = `w3a:wallet:${address}`;
+  const metaFile = path.join(userDir(userId), 'web3auth-meta.json');
+  const existing = readJSON(metaFile);
+  writeJSON(metaFile, {
+    userId, verifier: 'wallet', verifierId: address, email: '',
+    firstSeenAt: existing?.firstSeenAt || new Date().toISOString(),
+    lastLoginAt: new Date().toISOString(),
+  });
+
+  res.json({ ok: true, userId, sessionToken: issueSessionToken(userId) });
+});
+
 // Bulk sync — bot pushes full data file to Railway after every update
-app.post('/sync', (req, res) => {
+app.post('/sync', requireSession, (req, res) => {
   const { userId = 'local', data } = req.body;
   if (!data) return res.status(400).json({ error: 'data required' });
   const file = path.join(userDir(userId), 'scanned-subscriptions.json');
@@ -263,7 +355,7 @@ app.post('/sync', (req, res) => {
 });
 
 // Get subscriptions
-app.get('/subs', (req, res) => {
+app.get('/subs', requireSession, (req, res) => {
   const userId = req.query.userId || 'local';
   const file   = path.join(userDir(userId), 'scanned-subscriptions.json');
   const data   = readJSON(file) || { subscriptions: [], cancellation_history: [], monthly_budget: null };
@@ -272,42 +364,51 @@ app.get('/subs', (req, res) => {
 });
 
 // Add a single subscription (from extension manual add)
-app.post('/add-sub', (req, res) => {
+app.post('/add-sub', requireSession, async (req, res) => {
   const { sub, userId = 'local' } = req.body;
   if (!sub || !sub.name) return res.status(400).json({ error: 'sub.name required' });
   const file = path.join(userDir(userId), 'scanned-subscriptions.json');
-  const data = readJSON(file) || { subscriptions: [], cancellation_history: [], monthly_budget: null };
-  // Avoid duplicates by id
-  data.subscriptions = data.subscriptions.filter(s => s.id !== sub.id);
-  data.subscriptions.push(sub);
-  writeJSON(file, data);
-  res.json({ ok: true, count: data.subscriptions.length });
+  const count = await withFileLock(file, () => {
+    const data = readJSON(file) || { subscriptions: [], cancellation_history: [], monthly_budget: null };
+    // Avoid duplicates by id
+    data.subscriptions = data.subscriptions.filter(s => s.id !== sub.id);
+    data.subscriptions.push(sub);
+    writeJSON(file, data);
+    return data.subscriptions.length;
+  });
+  res.json({ ok: true, count });
 });
 
 // Delete a subscription
-app.post('/delete-sub', (req, res) => {
+app.post('/delete-sub', requireSession, async (req, res) => {
   const { subId, userId = 'local' } = req.body;
   if (!subId) return res.status(400).json({ error: 'subId required' });
   const file = path.join(userDir(userId), 'scanned-subscriptions.json');
-  const data = readJSON(file) || { subscriptions: [], cancellation_history: [], monthly_budget: null };
-  data.subscriptions = data.subscriptions.filter(s => s.id !== subId);
-  writeJSON(file, data);
-  res.json({ ok: true, count: data.subscriptions.length });
+  const count = await withFileLock(file, () => {
+    const data = readJSON(file) || { subscriptions: [], cancellation_history: [], monthly_budget: null };
+    data.subscriptions = data.subscriptions.filter(s => s.id !== subId);
+    writeJSON(file, data);
+    return data.subscriptions.length;
+  });
+  res.json({ ok: true, count });
 });
 
 // Update a subscription
-app.post('/update-sub', (req, res) => {
+app.post('/update-sub', requireSession, async (req, res) => {
   const { sub, userId = 'local' } = req.body;
   if (!sub || !sub.id) return res.status(400).json({ error: 'sub.id required' });
   const file = path.join(userDir(userId), 'scanned-subscriptions.json');
-  const data = readJSON(file) || { subscriptions: [], cancellation_history: [], monthly_budget: null };
-  data.subscriptions = data.subscriptions.map(s => s.id === sub.id ? { ...s, ...sub } : s);
-  writeJSON(file, data);
-  res.json({ ok: true, count: data.subscriptions.length });
+  const count = await withFileLock(file, () => {
+    const data = readJSON(file) || { subscriptions: [], cancellation_history: [], monthly_budget: null };
+    data.subscriptions = data.subscriptions.map(s => s.id === sub.id ? { ...s, ...sub } : s);
+    writeJSON(file, data);
+    return data.subscriptions.length;
+  });
+  res.json({ ok: true, count });
 });
 
 // Scan Gmail inbox
-app.post('/scan', async (req, res) => {
+app.post('/scan', requireSession, async (req, res) => {
   const { email, password, userId = 'local' } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'email and password required' });
   try {
@@ -341,7 +442,7 @@ app.post('/scan', async (req, res) => {
 });
 
 // Import a bank/card statement CSV — detects recurring charges Gmail never sees a receipt for
-app.post('/import-statement', async (req, res) => {
+app.post('/import-statement', requireSession, async (req, res) => {
   const { csvText, userId = 'local' } = req.body;
   if (!csvText) return res.status(400).json({ error: 'csvText required' });
   try {
@@ -370,7 +471,7 @@ app.post('/import-statement', async (req, res) => {
 });
 
 // Run LLM-powered audit (delegates to llm-analyze.py for contextual reasoning)
-app.post('/audit', async (req, res) => {
+app.post('/audit', requireSession, async (req, res) => {
   const { userId = 'local' } = req.body;
   const file = path.join(userDir(userId), 'scanned-subscriptions.json');
   const data = readJSON(file);
@@ -407,7 +508,7 @@ app.post('/audit', async (req, res) => {
 });
 
 // Get latest LLM analysis result
-app.get('/analysis', (req, res) => {
+app.get('/analysis', requireSession, (req, res) => {
   const userId       = req.query.userId || 'local';
   const analysisFile = path.join(userDir(userId), 'llm-analysis.json');
   const analysis     = readJSON(analysisFile);
@@ -416,10 +517,10 @@ app.get('/analysis', (req, res) => {
 });
 
 // Export CSV (calls export.py)
-app.post('/export', async (req, res) => {
+app.post('/export', requireSession, async (req, res) => {
   const { userId = 'local' } = req.body;
   try {
-    await runPy(`export.py --user-id ${userId} --notify`);
+    await runPy(`export.py --user-id ${userId}`);
     res.json({ ok: true, message: 'CSV exported' });
   } catch(e) {
     // Fallback — return CSV data for browser download
@@ -437,7 +538,7 @@ app.post('/export', async (req, res) => {
 });
 
 // Draft LLM-personalized negotiation email
-app.post('/negotiate', async (req, res) => {
+app.post('/negotiate', requireSession, async (req, res) => {
   const { serviceName, userId = 'local' } = req.body;
   if (!serviceName) return res.status(400).json({ error: 'serviceName required' });
 
@@ -505,7 +606,7 @@ app.post('/negotiate', async (req, res) => {
 // Log agent decision on Celo blockchain
 // Called by the LLM (via Python scripts) after every significant recommendation.
 // Creates an immutable on-chain audit trail of the agent's decisions.
-app.post('/log-decision', async (req, res) => {
+app.post('/log-decision', requireInternalToken, async (req, res) => {
   const { userId = 'local', action, amountSavedUSD = 0 } = req.body;
   if (!action) return res.status(400).json({ error: 'action required' });
 
@@ -548,7 +649,7 @@ app.post('/log-decision', async (req, res) => {
 });
 
 // Get agent decision history (local + on-chain status)
-app.get('/decisions', (req, res) => {
+app.get('/decisions', requireInternalToken, (req, res) => {
   const userId = req.query.userId || 'local';
   const file   = path.join(userDir(userId), 'decision-log.json');
   res.json(readJSON(file) || { decisions: [], totalSavedUSD: 0 });
@@ -560,7 +661,7 @@ app.get('/decisions', (req, res) => {
 const OP_COSTS_GD = { scan: 0.10, audit: 0.05, negotiate: 0.10, export: 0.05 };
 
 // GET /credits/:userId — balance, totalDeposited, totalSpent, opsRemaining
-app.get('/credits/:userId', async (req, res) => {
+app.get('/credits/:userId', requireSession, async (req, res) => {
   if (!creditsContract) return res.json({ balance: '0', totalDeposited: '0', totalSpent: '0', opsRemaining: 0, configured: false });
   try {
     const { ethers } = require('ethers');
@@ -579,7 +680,7 @@ app.get('/credits/:userId', async (req, res) => {
 });
 
 // POST /credits/spend — agent spends credits for an action
-app.post('/credits/spend', async (req, res) => {
+app.post('/credits/spend', requireSession, async (req, res) => {
   if (!creditsContract) return res.status(503).json({ error: 'Credits contract not configured' });
   const { userId, action } = req.body;
   if (!userId || !action) return res.status(400).json({ error: 'userId and action required' });
@@ -598,7 +699,7 @@ app.post('/credits/spend', async (req, res) => {
 // ── Unified charge endpoint ────────────────────────────────────────────────
 // Tries SubBotCredits first (G$ credits). Falls back to free tier.
 
-app.post('/charge', async (req, res) => {
+app.post('/charge', requireSession, async (req, res) => {
   const { userId, action } = req.body;
   if (!userId || !action) return res.status(400).json({ error: 'userId and action required' });
 
@@ -646,7 +747,7 @@ app.post('/charge', async (req, res) => {
 });
 
 // GET /charge-mode/:userId — tells the bot/frontend which mode the user is in
-app.get('/charge-mode/:userId', async (req, res) => {
+app.get('/charge-mode/:userId', requireSession, async (req, res) => {
   const { userId } = req.params;
   if (!creditsContract) return res.json({ mode: 'free', canRunNow: true });
 
@@ -680,37 +781,43 @@ app.get('/balance', async (req, res) => {
 });
 
 // Record credit deduction
-app.post('/deduct', (req, res) => {
+app.post('/deduct', requireSession, async (req, res) => {
   const { action, cost, walletAddress, userId = 'local' } = req.body;
-  const file   = path.join(userDir(userId), 'credits.json');
-  const ledger = readJSON(file) || { walletAddress, transactions: [] };
-  ledger.walletAddress = walletAddress || ledger.walletAddress;
-  ledger.transactions  = [{ type:'deduct', action, amount: cost, ts: new Date().toISOString() }, ...ledger.transactions].slice(0, 200);
-  writeJSON(file, ledger);
+  const file = path.join(userDir(userId), 'credits.json');
+  await withFileLock(file, () => {
+    const ledger = readJSON(file) || { walletAddress, transactions: [] };
+    ledger.walletAddress = walletAddress || ledger.walletAddress;
+    ledger.transactions  = [{ type:'deduct', action, amount: cost, ts: new Date().toISOString() }, ...ledger.transactions].slice(0, 200);
+    writeJSON(file, ledger);
+  });
   res.json({ ok: true });
 });
 
 // Get credit history
-app.get('/history', (req, res) => {
+app.get('/history', requireSession, (req, res) => {
   const userId = req.query.userId || 'local';
   const file   = path.join(userDir(userId), 'credits.json');
   res.json(readJSON(file) || { transactions: [] });
 });
 
 // Save budget
-app.post('/budget', (req, res) => {
+app.post('/budget', requireSession, async (req, res) => {
   const { budget, budgetCurrency, userId = 'local' } = req.body;
   const file = path.join(userDir(userId), 'scanned-subscriptions.json');
-  const data = readJSON(file) || { subscriptions: [], cancellation_history: [] };
-  data.monthly_budget = budget;
-  if (budgetCurrency) data.budget_currency = budgetCurrency;
-  writeJSON(file, data);
-  res.json({ ok: true, budget, budgetCurrency: data.budget_currency });
+  const finalCurrency = await withFileLock(file, () => {
+    const data = readJSON(file) || { subscriptions: [], cancellation_history: [] };
+    data.monthly_budget = budget;
+    if (budgetCurrency) data.budget_currency = budgetCurrency;
+    writeJSON(file, data);
+    return data.budget_currency;
+  });
+  res.json({ ok: true, budget, budgetCurrency: finalCurrency });
 });
 
 // ── Telemetry ──────────────────────────────────────────────────────────────
 const TELE_FILE = path.join(HERMES_HOME, 'telemetry.ndjson');
-const TELE_KEY  = process.env.TELEMETRY_KEY || 'subbot-admin-2024';
+const TELE_KEY  = process.env.TELEMETRY_KEY || '';
+if (!TELE_KEY) console.warn('[SubBot] TELEMETRY_KEY not set — /telemetry/stats will reject all requests until it is configured.');
 const teleEvents = [];
 const userMap    = {}; // userId → { email, subCount, sessions, lastSeen, pwa, loginCount }
 
@@ -773,7 +880,7 @@ app.post('/telemetry', (req, res) => {
 });
 
 app.get('/telemetry/stats', (req, res) => {
-  if (req.query.key !== TELE_KEY) return res.status(401).send('Unauthorized');
+  if (!TELE_KEY || req.query.key !== TELE_KEY) return res.status(401).send('Unauthorized');
   const now = Date.now();
   const DAY = 86400000;
   const e1d = teleEvents.filter(e => now - e.ts < DAY);

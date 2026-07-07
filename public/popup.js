@@ -12,7 +12,7 @@ function track(event, props = {}) {
   try {
     const pwa = window.matchMedia('(display-mode: standalone)').matches;
     const theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
-    fetch(`${API}/telemetry`, {
+    apiFetch(`${API}/telemetry`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ event, session: _SESSION_ID, pwa, theme, ...props })
@@ -157,7 +157,7 @@ async function payForAction(action) {
   // Try backend credits first (SubBotCredits contract, agent-signed)
   try {
     const uid = userId();
-    const chargeResp = await fetch(`${API}/charge`, {
+    const chargeResp = await apiFetch(`${API}/charge`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: uid, action }),
@@ -187,7 +187,7 @@ async function payForAction(action) {
 async function fetchCreditsBalance() {
   const uid = userId();
   try {
-    const r = await fetch(`${API}/credits/${encodeURIComponent(uid)}`, { signal: AbortSignal.timeout(5000) });
+    const r = await apiFetch(`${API}/credits/${encodeURIComponent(uid)}`, { signal: AbortSignal.timeout(5000) });
     if (!r.ok) return;
     const d = await r.json();
     const bal = parseFloat(d.balance) || 0;
@@ -740,8 +740,47 @@ async function openWeb3AuthModal() {
     w3aSet(payload);
     renderW3AStatus(payload);
 
-    // Set userId from wallet address (works for both social + external wallets)
-    state.userId = address ? `w3a:${payload.verifier}:${address}` : `w3a:${payload.verifier}:${payload.verifierId}`;
+    // Verify server-side and get a session token — the client's own guess at
+    // userId is never trusted directly; every subsequent request is gated on
+    // this token matching the userId it claims.
+    let authResult;
+    try {
+      if (info.idToken) {
+        const r = await apiFetch(`${API}/auth/verify-web3auth`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken: info.idToken, verifier: payload.verifier, verifierId: payload.verifierId }),
+        });
+        authResult = await r.json();
+        if (!r.ok) throw new Error(authResult.error || 'Verification failed');
+      } else if (address) {
+        // External wallet (MetaMask, MiniPay) — no idToken to verify, prove
+        // ownership by signing a server-issued nonce instead.
+        const nonceResp = await apiFetch(`${API}/auth/nonce`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address }),
+        });
+        const { message } = await nonceResp.json();
+        const signature = await provider.request({ method: 'personal_sign', params: [message, address] });
+        const verifyResp = await apiFetch(`${API}/auth/verify-wallet`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address, signature }),
+        });
+        authResult = await verifyResp.json();
+        if (!verifyResp.ok) throw new Error(authResult.error || 'Wallet verification failed');
+      } else {
+        throw new Error('No idToken or wallet address available to verify');
+      }
+    } catch (err) {
+      console.error('Session verification failed:', err);
+      toast('Login verification failed — try again');
+      return;
+    }
+
+    state.userId       = authResult.userId;
+    state.sessionToken = authResult.sessionToken;
     saveState();
 
     track('login', { method: payload.verifier || 'web3auth', email: info.email || '', userId: state.userId });
@@ -819,8 +858,9 @@ async function web3authLogout() {
   try { if (web3authInstance?.connected) await web3authInstance.logout(); web3authInstance = null; web3authInitPromise = null; } catch (_) {}
   w3aRemove(() => {
     renderW3AStatus(null);
-    state.userId = null;
-    state.subscriptions  = [];
+    state.userId       = null;
+    state.sessionToken = null;
+    state.subscriptions = [];
     state.balance        = 0;
     state.txHistory      = [];
     saveState();
@@ -831,12 +871,22 @@ async function web3authLogout() {
 
 let state = {
   userId:         null,
+  sessionToken:   null,
   subscriptions:  [],
   budget:         100,
   budgetCurrency: 'USD',
   balance:        0,
   txHistory:      [],
 };
+
+// Wraps fetch() to attach the session token issued at login — every endpoint
+// that reads/writes user-scoped data requires this to match the userId being
+// acted on (see requireSession in api-bridge.js).
+function apiFetch(url, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  if (state.sessionToken) headers['Authorization'] = `Bearer ${state.sessionToken}`;
+  return fetch(url, { ...options, headers });
+}
 
 // ── User ID ───────────────────────────────────────────────────────────────
 function userId() { return state.userId || 'local'; }
@@ -876,7 +926,7 @@ async function confirmRenewal(id) {
   sub.next_renewal = d.toISOString().slice(0, 10);
   delete sub.renewal_pending;
   saveState();
-  try { await fetch(`${API}/update-sub`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sub: { id: sub.id, next_renewal: sub.next_renewal }, userId: userId() }) }); } catch (_) {}
+  try { await apiFetch(`${API}/update-sub`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sub: { id: sub.id, next_renewal: sub.next_renewal }, userId: userId() }) }); } catch (_) {}
   toast(`${sub.name} renewed — next: ${sub.next_renewal}`);
   refreshDashboard();
 }
@@ -887,7 +937,7 @@ async function confirmCancellation(id) {
   sub.status = 'cancelled';
   delete sub.renewal_pending;
   saveState();
-  try { await fetch(`${API}/update-sub`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sub: { id: sub.id, status: 'cancelled' }, userId: userId() }) }); } catch (_) {}
+  try { await apiFetch(`${API}/update-sub`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sub: { id: sub.id, status: 'cancelled' }, userId: userId() }) }); } catch (_) {}
   toast(`${sub.name} marked as cancelled`);
   refreshDashboard();
   renderSubs();
@@ -998,7 +1048,7 @@ document.addEventListener('click', e => {
 async function fetchUserData(silent = true) {
   let gotData = false;
   try {
-    const r = await fetch(`${API}/subs?userId=${userId()}`, { signal: AbortSignal.timeout(3000) });
+    const r = await apiFetch(`${API}/subs?userId=${userId()}`, { signal: AbortSignal.timeout(3000) });
     if (r.ok) {
       const d = await r.json();
       if (d.subscriptions?.length) {
@@ -1022,7 +1072,7 @@ async function fetchUserData(silent = true) {
   } catch(e) {}
 
   try {
-    const r = await fetch(`${API}/history?userId=${userId()}`, { signal: AbortSignal.timeout(3000) });
+    const r = await apiFetch(`${API}/history?userId=${userId()}`, { signal: AbortSignal.timeout(3000) });
     if (r.ok) {
       const d = await r.json();
       const txs = d.transactions || [];
@@ -1272,7 +1322,7 @@ async function deleteSub(id) {
   saveState();
 
   try {
-    await fetch(`${API}/delete-sub`, {
+    await apiFetch(`${API}/delete-sub`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ subId: id, userId: userId() }),
@@ -1515,7 +1565,7 @@ async function saveBudget() {
     state.budget = v;
     state.budgetCurrency = document.getElementById('budget-currency')?.value || 'USD';
     saveState();
-    try { await fetch(`${API}/budget`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ budget: v, budgetCurrency: state.budgetCurrency, userId: userId() }) }); } catch(e) {}
+    try { await apiFetch(`${API}/budget`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ budget: v, budgetCurrency: state.budgetCurrency, userId: userId() }) }); } catch(e) {}
     toast('Budget saved!');
     refreshDashboard();
   }
@@ -1559,7 +1609,7 @@ async function saveManualSub() {
     // Update existing
     state.subscriptions = state.subscriptions.map(s => s.id === editingSubId ? { ...s, ...sub } : s);
     try {
-      await fetch(`${API}/update-sub`, {
+      await apiFetch(`${API}/update-sub`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sub, userId: userId() }),
@@ -1570,7 +1620,7 @@ async function saveManualSub() {
   } else {
     // Add new
     try {
-      await fetch(`${API}/add-sub`, {
+      await apiFetch(`${API}/add-sub`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sub, userId: userId() }),
@@ -1618,7 +1668,7 @@ async function exportCSV() {
   if (!paid) return;
 
   try {
-    const r = await fetch(`${API}/export`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: userId() }) });
+    const r = await apiFetch(`${API}/export`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: userId() }) });
     if (r.ok) { toast('CSV exported!'); return; }
   } catch(e) {}
 
@@ -1711,7 +1761,7 @@ async function runGmailScan() {
   if (btn) { btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-sm"></i> Scanning…'; btn.disabled = true; }
 
   try {
-    const r = await fetch(`${API}/scan`, {
+    const r = await apiFetch(`${API}/scan`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, userId: userId() }),
@@ -1775,7 +1825,7 @@ async function runStatementImport() {
   try {
     const csvText = await file.text();
     const beforeCount = state.subscriptions.length;
-    const r = await fetch(`${API}/import-statement`, {
+    const r = await apiFetch(`${API}/import-statement`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ csvText, userId: userId() }),
@@ -1934,7 +1984,10 @@ function scheduleRenewalNotifications() {
   if (localStorage.getItem('push-enabled') === 'false') return;
   navigator.serviceWorker.ready.then(reg => {
     if (!reg.active) return;
-    const subs = (state.subscriptions || []).filter(s => s.status === 'active' && s.next_renewal);
+    // Not just renewal reminders any more — the SW also derives price-hike and
+    // trial-conversion alerts from price_history/is_trial fields already on
+    // each sub, so pass every active sub through, not just ones with a renewal date.
+    const subs = (state.subscriptions || []).filter(s => s.status === 'active');
     reg.active.postMessage({ type: 'schedule-renewals', subs });
   });
 }

@@ -7,10 +7,10 @@ The model sees the full subscription context and reasons about ROI,
 overlaps, and negotiation opportunities — not fixed thresholds.
 
 Usage:
-  python3 llm-analyze.py --user-id 6710506545 [--notify] [--output-json]
+  python3 llm-analyze.py --user-id 6710506545 [--output-json]
 
 Cron (weekly re-analysis):
-  0 8 * * 1 python3 ~/.hermes/llm-analyze.py --user-id 6710506545 --notify >> ~/.hermes/analyze.log 2>&1
+  0 8 * * 1 python3 ~/.hermes/llm-analyze.py --user-id 6710506545 >> ~/.hermes/analyze.log 2>&1
 """
 
 import json
@@ -18,17 +18,20 @@ import os
 import sys
 import argparse
 import urllib.request
-import urllib.parse
 import urllib.error
 from datetime import date, datetime
 from pathlib import Path
 
-BOT_TOKEN   = os.getenv("TELEGRAM_BOT_TOKEN", "8722561752:AAHrCn9n8jA599baGU_pTi_JKO5ApOmMc24")
-API_KEY     = os.getenv("OPENAI_API_KEY", "")
-API_BASE    = os.getenv("OPENAI_BASE_URL", "https://inference-api.nousresearch.com/v1")
-MODEL       = os.getenv("LLM_MODEL", "NousResearch/Hermes-3-Llama-3.1-70B")
-USER_DATA_DIR = Path.home() / ".hermes" / "user-data"
-BRIDGE_URL  = os.getenv("BRIDGE_URL", "http://localhost:3747")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import load_env
+load_env.load_hermes_env()
+
+API_KEY               = os.getenv("OPENAI_API_KEY", "")
+API_BASE              = os.getenv("OPENAI_BASE_URL", "https://inference-api.nousresearch.com/v1")
+MODEL                 = os.getenv("LLM_MODEL", "NousResearch/Hermes-3-Llama-3.1-70B")
+USER_DATA_DIR         = Path.home() / ".hermes" / "user-data"
+BRIDGE_URL            = os.getenv("BRIDGE_URL", "http://localhost:3747")
+INTERNAL_SERVICE_TOKEN = os.getenv("INTERNAL_SERVICE_TOKEN", "")
 
 
 def load_subscriptions(user_id: str) -> dict:
@@ -84,25 +87,14 @@ def log_decision_onchain(user_id: str, action: str, amount_saved_usd: float):
         req = urllib.request.Request(
             f"{BRIDGE_URL}/log-decision",
             data=payload,
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                "X-Internal-Token": INTERNAL_SERVICE_TOKEN,
+            },
         )
         urllib.request.urlopen(req, timeout=5)
     except Exception:
         pass  # non-critical — don't fail the analysis
-
-
-def send_telegram(chat_id: str, message: str):
-    url  = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    data = urllib.parse.urlencode({
-        "chat_id":    chat_id,
-        "text":       message,
-        "parse_mode": "HTML",
-    }).encode()
-    req = urllib.request.Request(url, data=data)
-    try:
-        urllib.request.urlopen(req, timeout=10)
-    except Exception as e:
-        print(f"Telegram send failed: {e}")
 
 
 def analyze(user_id: str) -> dict:
@@ -206,64 +198,9 @@ say what that implies about real usage. Reference renewal dates when they create
     return result
 
 
-def format_telegram_report(analysis: dict) -> str:
-    health_emoji = {"good": "✅", "warning": "⚠️", "critical": "🚨"}.get(
-        analysis.get("overall_health", ""), "📊"
-    )
-    lines = [
-        f"{health_emoji} <b>Subscription Analysis</b>\n",
-        f"{analysis['summary']}\n",
-        f"💰 Monthly: <b>${analysis.get('total_monthly_usd', 0):.2f}</b>"
-        f"  |  Annual: ${analysis.get('annual_usd', 0):.0f}",
-    ]
-
-    budget_status = analysis.get("budget_status")
-    gap           = analysis.get("budget_gap_usd")
-    if budget_status == "over" and gap:
-        lines.append(f"⚠️ Over budget by <b>${gap:.2f}</b>")
-    elif budget_status == "under" and gap is not None:
-        lines.append(f"✅ Under budget by ${abs(gap):.2f}")
-
-    overlaps = analysis.get("overlaps", [])
-    if overlaps:
-        lines.append(f"\n<b>🔁 Overlaps ({len(overlaps)} found)</b>")
-        for o in overlaps[:3]:
-            services = " + ".join(o["services"])
-            saving   = o.get("monthly_saving_usd", 0)
-            lines.append(f"• {services} → save ${saving:.0f}/mo")
-            lines.append(f"  <i>{o['recommendation']}</i>")
-
-    forgotten = analysis.get("forgotten_services", [])
-    if forgotten:
-        lines.append(f"\n<b>🕳 Likely forgotten ({len(forgotten)})</b>")
-        for f in forgotten[:3]:
-            lines.append(f"• {f['service']} — ${f.get('monthly_cost_usd', 0):.0f}/mo")
-            lines.append(f"  <i>{f['evidence']}</i>")
-
-    quick_wins = analysis.get("quick_wins", [])
-    if quick_wins:
-        lines.append(f"\n<b>⚡ Quick wins</b>")
-        for qw in quick_wins[:3]:
-            lines.append(f"• {qw}")
-
-    actions = analysis.get("action_items", [])
-    high    = [a for a in actions if a.get("priority") == "high"]
-    if high:
-        lines.append(f"\n<b>🎯 Priority actions</b>")
-        for a in high[:3]:
-            saving     = a.get("monthly_saving_usd")
-            saving_str = f" (save ${saving:.0f}/mo)" if saving else ""
-            lines.append(f"• {a['action'].title()} <b>{a['service']}</b>{saving_str}")
-            lines.append(f"  <i>{a['reasoning']}</i>")
-
-    lines.append("\nReply <b>/negotiate</b> to draft discount emails for top candidates.")
-    return "\n".join(lines)
-
-
 def main():
     parser = argparse.ArgumentParser(description="LLM-powered subscription portfolio analyzer")
-    parser.add_argument("--user-id",    required=True, help="Telegram user ID")
-    parser.add_argument("--notify",     action="store_true", help="Send results via Telegram")
+    parser.add_argument("--user-id",    required=True, help="User ID to analyze")
     parser.add_argument("--output-json", action="store_true", help="Print full JSON to stdout")
     args = parser.parse_args()
 
@@ -299,11 +236,6 @@ def main():
         print(f"Actions:     {len(analysis.get('action_items', []))}")
         print(f"Overlaps:    {len(analysis.get('overlaps', []))}")
         print(f"Quick wins:  {len(analysis.get('quick_wins', []))}")
-
-    if args.notify:
-        report = format_telegram_report(analysis)
-        send_telegram(args.user_id, report)
-        print("Telegram notification sent.")
 
 
 if __name__ == "__main__":

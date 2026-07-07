@@ -9,7 +9,6 @@ an email that reflects their real leverage.
 
 Usage:
   python3 negotiate.py --user-id 6710506545 --service "ChatGPT Plus"
-  python3 negotiate.py --user-id 6710506545 --service "GitHub Copilot" --notify
 
 Output: JSON with { to, subject, body, strategy_used }
 """
@@ -19,16 +18,19 @@ import os
 import sys
 import argparse
 import urllib.request
-import urllib.parse
 from datetime import date, datetime
 from pathlib import Path
 
-BOT_TOKEN     = os.getenv("TELEGRAM_BOT_TOKEN", "8722561752:AAHrCn9n8jA599baGU_pTi_JKO5ApOmMc24")
-API_KEY       = os.getenv("OPENAI_API_KEY", "")
-API_BASE      = os.getenv("OPENAI_BASE_URL", "https://inference-api.nousresearch.com/v1")
-MODEL         = os.getenv("LLM_MODEL", "NousResearch/Hermes-3-Llama-3.1-70B")
-USER_DATA_DIR = Path.home() / ".hermes" / "user-data"
-BRIDGE_URL    = os.getenv("BRIDGE_URL", "http://localhost:3747")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import load_env
+load_env.load_hermes_env()
+
+API_KEY               = os.getenv("OPENAI_API_KEY", "")
+API_BASE              = os.getenv("OPENAI_BASE_URL", "https://inference-api.nousresearch.com/v1")
+MODEL                 = os.getenv("LLM_MODEL", "NousResearch/Hermes-3-Llama-3.1-70B")
+USER_DATA_DIR         = Path.home() / ".hermes" / "user-data"
+BRIDGE_URL            = os.getenv("BRIDGE_URL", "http://localhost:3747")
+INTERNAL_SERVICE_TOKEN = os.getenv("INTERNAL_SERVICE_TOKEN", "")
 
 
 def load_user_context(user_id: str) -> tuple[dict, dict | None]:
@@ -84,22 +86,14 @@ def log_decision(user_id: str, amount_saved: float):
         req = urllib.request.Request(
             f"{BRIDGE_URL}/log-decision",
             data=payload,
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                "X-Internal-Token": INTERNAL_SERVICE_TOKEN,
+            },
         )
         urllib.request.urlopen(req, timeout=5)
     except Exception:
         pass
-
-
-def send_telegram(chat_id: str, message: str):
-    url  = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    data = urllib.parse.urlencode({
-        "chat_id":    chat_id,
-        "text":       message,
-        "parse_mode": "HTML",
-    }).encode()
-    req = urllib.request.Request(url, data=data)
-    urllib.request.urlopen(req, timeout=10)
 
 
 def generate_negotiation_email(user_id: str, service_name: str) -> dict:
@@ -191,9 +185,8 @@ Return JSON with exactly:
 
 def main():
     parser = argparse.ArgumentParser(description="LLM-powered negotiation email generator")
-    parser.add_argument("--user-id",  required=True, help="Telegram user ID")
+    parser.add_argument("--user-id",  required=True, help="User ID to load context for")
     parser.add_argument("--service",  required=True, help="Service name to negotiate for")
-    parser.add_argument("--notify",   action="store_true", help="Send draft to Telegram")
     args = parser.parse_args()
 
     if not API_KEY:
@@ -217,18 +210,6 @@ def main():
     monthly_cost   = target.get("monthly_cost_usd") or target.get("monthly_cost", 0)
     estimated_saving = round(monthly_cost * discount / 100, 2)
     log_decision(args.user_id, estimated_saving)
-
-    if args.notify:
-        lines = [
-            f"✉️ <b>Negotiation Draft — {args.service}</b>\n",
-            f"<b>To:</b> {result['to']}",
-            f"<b>Subject:</b> {result['subject']}\n",
-            result['body'],
-            f"\n<i>Strategy: {result.get('strategy_used', '')}</i>",
-            f"<i>Expected discount: ~{result.get('estimated_discount_pct', 20)}%</i>",
-        ]
-        send_telegram(args.user_id, "\n".join(lines))
-        print("Sent to Telegram.", file=sys.stderr)
 
 
 if __name__ == "__main__":

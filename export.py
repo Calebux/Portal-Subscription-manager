@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
 Hermes Subscription Export
-Generates a CSV audit report and sends it as a file via Telegram.
+Generates a CSV audit report of the user's subscription portfolio.
 
 Usage:
   python3 ~/.hermes/export.py --user-id 6710506545
-  python3 ~/.hermes/export.py --user-id 6710506545 --notify
 """
 
 import json
@@ -13,12 +12,9 @@ import csv
 import sys
 import os
 import argparse
-import urllib.request
-import urllib.parse
 from datetime import datetime, date
 from pathlib import Path
 
-TELEGRAM_BOT_TOKEN = "8722561752:AAHrCn9n8jA599baGU_pTi_JKO5ApOmMc24"
 sys.path.insert(0, str(Path.home() / ".hermes"))
 
 try:
@@ -36,47 +32,6 @@ def load_data(user_id: str) -> dict:
         with open(data_file) as f:
             return json.load(f)
     return {"subscriptions": [], "cancellation_history": [], "monthly_budget": None}
-
-
-def send_telegram_file(chat_id: str, file_path: str, caption: str):
-    """Send a file via Telegram Bot API."""
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendDocument"
-    with open(file_path, "rb") as f:
-        file_data = f.read()
-
-    import email.mime.multipart
-    boundary = "----FormBoundary7MA4YWxkTrZu0gW"
-    body = (
-        f"--{boundary}\r\n"
-        f'Content-Disposition: form-data; name="chat_id"\r\n\r\n{chat_id}\r\n'
-        f"--{boundary}\r\n"
-        f'Content-Disposition: form-data; name="caption"\r\n\r\n{caption}\r\n'
-        f"--{boundary}\r\n"
-        f'Content-Disposition: form-data; name="document"; filename="{Path(file_path).name}"\r\n'
-        f"Content-Type: text/csv\r\n\r\n"
-    ).encode() + file_data + f"\r\n--{boundary}--\r\n".encode()
-
-    req = urllib.request.Request(
-        url,
-        data=body,
-        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            result = json.loads(resp.read())
-            return result.get("ok", False)
-    except Exception as e:
-        print(f"Telegram file send failed: {e}")
-        return False
-
-
-def send_telegram_msg(chat_id: str, text: str):
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    data = urllib.parse.urlencode({"chat_id": chat_id, "text": text, "parse_mode": "HTML"}).encode()
-    try:
-        urllib.request.urlopen(urllib.request.Request(url, data=data), timeout=10)
-    except Exception:
-        pass
 
 
 def generate_csv(data: dict, out_path: str):
@@ -159,11 +114,9 @@ def generate_csv(data: dict, out_path: str):
 
 def main():
     parser = argparse.ArgumentParser(description="Hermes Subscription Export")
-    parser.add_argument("--user-id", default="local", help="Telegram user ID")
-    parser.add_argument("--notify", action="store_true", help="Send CSV file to Telegram")
+    parser.add_argument("--user-id", default="local", help="User ID to export")
     args = parser.parse_args()
 
-    chat_id = args.user_id if args.user_id != "local" else "6710506545"
     data = load_data(args.user_id)
 
     active = [s for s in data.get("subscriptions", []) if s.get("status") == "active"]
@@ -176,20 +129,6 @@ def main():
     generate_csv(data, out_path)
 
     print(f"\nSummary: {len(active)} active subscriptions — ${total_usd:.2f}/mo USD (${total_usd * 12:.2f}/yr)")
-
-    if args.notify:
-        caption = (
-            f"📊 Subscription Report — {datetime.now().strftime('%B %Y')}\n"
-            f"Active: {len(active)} subscriptions\n"
-            f"Monthly: ${total_usd:.2f} USD\n"
-            f"Annual: ${total_usd * 12:.2f} USD"
-        )
-        ok = send_telegram_file(chat_id, out_path, caption)
-        if ok:
-            print("File sent to Telegram ✓")
-        else:
-            print("File send failed — sending text summary instead")
-            send_telegram_msg(chat_id, caption)
 
 
 if __name__ == "__main__":

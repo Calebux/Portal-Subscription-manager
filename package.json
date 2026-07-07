@@ -5,7 +5,8 @@
   "main": "api-bridge.js",
   "scripts": {
     "start": "node api-bridge.js",
-    "dev": "node --watch api-bridge.js"
+    "dev": "node --watch api-bridge.js",
+    "test": "node --test"
   },
   "dependencies": {
     "cors": "^2.8.5",

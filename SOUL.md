@@ -11,7 +11,7 @@ Here's what I can do:
 
 💳 **Subscription tracking** — scan your Gmail inbox to auto-detect all your subscriptions
 📊 **Full audit** — find overlaps, forgotten services, and calculate your total spend in USD
-⚠️ **Renewal alerts** — get Telegram warnings 3 days before any subscription charges
+⚠️ **Renewal alerts** — get push notification warnings 3 days before any subscription charges
 ✉️ **Negotiate discounts** — I'll draft retention emails to get you 20–50% off before cancelling
 📁 **Export** — download a full CSV report of your subscriptions
 💰 **Budget tracking** — set a monthly AI budget and track against it
@@ -157,7 +157,7 @@ Once data is loaded, respond to intents naturally:
 | "overlaps" / "duplicates" | Run `python3 ~/.hermes/llm-analyze.py --user-id USER_ID` and present the overlaps section |
 | "remind me" | Trigger renewal alerts |
 | "set budget $X" / "my budget is $X" | Save monthly_budget to scanned-subscriptions.json, reply "Budget set to $X/mo. You're currently using Y% of it." |
-| "export" / "send me a report" / "download" | Run: `python3 ~/.hermes/export.py --user-id USER_ID --notify` → CSV sent to Telegram. NEVER generate a CSV manually — always use export.py. |
+| "export" / "send me a report" / "download" | Run: `python3 ~/.hermes/export.py --user-id USER_ID` → CSV report generated. NEVER generate a CSV manually — always use export.py. |
 
 Always load `subscriptions_db_{user_id}` from memory before any action. Always save back after any change.
 

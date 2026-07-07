@@ -19,7 +19,6 @@ import time
 import hashlib
 import argparse
 import urllib.request
-import urllib.parse
 from datetime import datetime, timedelta, timezone
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
@@ -32,7 +31,6 @@ import sub_store
 # ── Config ────────────────────────────────────────────────────────────────────
 LOOKBACK_DAYS = 120
 HERMES_MEMORY_DIR = Path.home() / ".hermes" / "memory"
-TELEGRAM_BOT_TOKEN = "8722561752:AAHrCn9n8jA599baGU_pTi_JKO5ApOmMc24"
 
 SUBSCRIPTION_SIGNALS = [
     "subscription", "your plan", "membership",
@@ -497,22 +495,11 @@ def scan_gmail(email_addr: str, app_password: str, progress_fn=None) -> list[dic
     return records
 
 
-def send_telegram(chat_id: str, message: str):
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    data = urllib.parse.urlencode({"chat_id": chat_id, "text": message}).encode()
-    try:
-        req = urllib.request.Request(url, data=data)
-        urllib.request.urlopen(req, timeout=10)
-    except Exception as e:
-        print(f"Telegram send failed: {e}")
-
-
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(description="Hermes Gmail Subscription Scanner")
     parser.add_argument("--email", action="append", required=True, help="Gmail address (repeat for multiple accounts)")
-    parser.add_argument("--user-id", default=None, help="Telegram user ID for namespacing")
-    parser.add_argument("--notify", action="store_true", help="Send results to Telegram")
+    parser.add_argument("--user-id", default=None, help="User ID for namespacing")
     args = parser.parse_args()
 
     # Read passwords from stdin as JSON (keeps them out of process args / ps output)
@@ -529,11 +516,6 @@ def main():
 
     accounts = list(zip(args.email, passwords))
     user_id = args.user_id or "default"
-    chat_id = args.user_id or "6710506545"
-
-    if args.notify:
-        acct_word = "account" if len(accounts) == 1 else f"{len(accounts)} accounts"
-        send_telegram(chat_id, f"Scanning {acct_word} for subscriptions... this takes ~30 seconds each.")
 
     # Scan all accounts and merge by merchant (latest record wins)
     merged: dict[str, dict] = {}
@@ -583,19 +565,6 @@ def main():
         cur = s.get("currency", "USD")
         sym = "₦" if cur == "NGN" else ("£" if cur == "GBP" else ("€" if cur == "EUR" else "$"))
         print(f"  {s['name']:30} {sym}{s['monthly_cost']:.2f}/mo  [{cur}]  (renews {s['next_renewal']})")
-
-    if args.notify and chat_id:
-        msg_lines = [
-            f"Gmail scan complete! Found {len(active)} active subscriptions.\n",
-            f"USD subscriptions: ${total_usd:.2f}/month\n\n",
-            "Subscriptions found:",
-        ]
-        for s in sorted(active, key=lambda x: x["monthly_cost"] or 0, reverse=True)[:8]:
-            cur = s.get("currency", "USD")
-            sym = "₦" if cur == "NGN" else ("£" if cur == "GBP" else ("€" if cur == "EUR" else "$"))
-            msg_lines.append(f"  {s['name']} - {sym}{s['monthly_cost']:.2f}/mo")
-        msg_lines.append("\nSay 'audit my subscriptions' for overlap analysis.")
-        send_telegram(chat_id, "\n".join(msg_lines))
 
 
 if __name__ == "__main__":

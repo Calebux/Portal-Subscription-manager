@@ -133,35 +133,84 @@ self.addEventListener('message', e => {
   }
 });
 
-// Check renewals and fire OS notifications
+// Check renewals, price hikes, and trial conversions — fires OS notifications
+// entirely client-side from data already in `subs` (no server push needed;
+// this is the only notification delivery path since Telegram was removed).
 function checkRenewals() {
   if (!renewalSubs.length) return;
   const now = new Date();
   const notified = new Set(JSON.parse(self._notifiedKeys || '[]'));
 
   renewalSubs.forEach(sub => {
-    if (!sub.next_renewal || sub.status !== 'active') return;
-    const days = Math.ceil((new Date(sub.next_renewal) - now) / 86400000);
-    const key = `${sub.id || sub.name}-${sub.next_renewal}-${days}`;
+    if (sub.status !== 'active') return;
 
-    if (notified.has(key)) return;
-    if (days < 0 || days > 3) return;
+    // Renewal reminders (3 days out through the day of)
+    if (sub.next_renewal) {
+      const days = Math.ceil((new Date(sub.next_renewal) - now) / 86400000);
+      const key = `renewal-${sub.id || sub.name}-${sub.next_renewal}-${days}`;
 
-    let body;
-    if (days === 0) body = `${sub.name} renews TODAY — ${sub.currency || '$'}${sub.monthly_cost}/mo`;
-    else if (days === 1) body = `${sub.name} renews TOMORROW — ${sub.currency || '$'}${sub.monthly_cost}/mo`;
-    else body = `${sub.name} renews in ${days} days — ${sub.currency || '$'}${sub.monthly_cost}/mo`;
+      if (!notified.has(key) && days >= 0 && days <= 3) {
+        let body;
+        if (days === 0) body = `${sub.name} renews TODAY — ${sub.currency || '$'}${sub.monthly_cost}/mo`;
+        else if (days === 1) body = `${sub.name} renews TOMORROW — ${sub.currency || '$'}${sub.monthly_cost}/mo`;
+        else body = `${sub.name} renews in ${days} days — ${sub.currency || '$'}${sub.monthly_cost}/mo`;
 
-    self.registration.showNotification('SubBot · Renewal Alert', {
-      body,
-      icon: '/icon-192.png',
-      badge: '/favicon-32.png',
-      tag: `renewal-${sub.id || sub.name}-${days}`,
-      data: { url: '/' },
-      renotify: true,
-    });
+        self.registration.showNotification('SubBot · Renewal Alert', {
+          body,
+          icon: '/icon-192.png',
+          badge: '/favicon-32.png',
+          tag: `renewal-${sub.id || sub.name}-${days}`,
+          data: { url: '/' },
+          renotify: true,
+        });
+        notified.add(key);
+      }
+    }
 
-    notified.add(key);
+    // Price-hike alerts — fires once per detected change
+    if (sub.price_changed_at && Array.isArray(sub.price_history) && sub.price_history.length) {
+      const key = `pricehike-${sub.id || sub.name}-${sub.price_changed_at}`;
+      if (!notified.has(key)) {
+        const oldAmount = sub.price_history[sub.price_history.length - 1].amount;
+        const pct = oldAmount ? Math.round((sub.monthly_cost - oldAmount) / oldAmount * 100) : null;
+        const direction = pct !== null && pct < 0 ? 'down' : 'up';
+        const body = pct !== null
+          ? `${sub.name} price went ${direction} ${Math.abs(pct)}% — now ${sub.currency || '$'}${sub.monthly_cost}/mo`
+          : `${sub.name} price changed — now ${sub.currency || '$'}${sub.monthly_cost}/mo`;
+
+        self.registration.showNotification('SubBot · Price Change', {
+          body,
+          icon: '/icon-192.png',
+          badge: '/favicon-32.png',
+          tag: `pricehike-${sub.id || sub.name}`,
+          data: { url: '/' },
+          renotify: true,
+        });
+        notified.add(key);
+      }
+    }
+
+    // Trial-to-paid conversion alerts (3 days out through the day of)
+    if (sub.is_trial && sub.trial_ends) {
+      const days = Math.ceil((new Date(sub.trial_ends) - now) / 86400000);
+      const key = `trial-${sub.id || sub.name}-${sub.trial_ends}-${days}`;
+
+      if (!notified.has(key) && days >= 0 && days <= 3) {
+        const body = days === 0
+          ? `${sub.name}'s free trial ends TODAY — you'll be charged ${sub.currency || '$'}${sub.monthly_cost}/mo`
+          : `${sub.name}'s free trial ends in ${days} day${days === 1 ? '' : 's'} — you'll be charged ${sub.currency || '$'}${sub.monthly_cost}/mo`;
+
+        self.registration.showNotification('SubBot · Trial Ending', {
+          body,
+          icon: '/icon-192.png',
+          badge: '/favicon-32.png',
+          tag: `trial-${sub.id || sub.name}-${days}`,
+          data: { url: '/' },
+          renotify: true,
+        });
+        notified.add(key);
+      }
+    }
   });
 
   self._notifiedKeys = JSON.stringify([...notified]);

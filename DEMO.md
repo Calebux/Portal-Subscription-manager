@@ -49,7 +49,7 @@ Bot lists upcoming renewals with amounts and direct cancel links.
 ### 7. Export
 Say: `export my subscriptions`
 
-Bot sends a CSV file directly to Telegram with full audit data.
+Bot generates a CSV file with full audit data, available for download from the dashboard.
 
 ### 8. Cancel + Negotiate
 Say: `cancel [service name]`
@@ -63,7 +63,7 @@ Bot asks if you want to try for a discount first, drafts a retention email, offe
 - **Multi-user**: every person who DMs the bot gets their own isolated data
 - **Multi-currency**: NGN, GBP, EUR all normalized to USD in reports
 - **Token ROI**: unique feature — tells you if your LLM subscription is worth it based on actual usage
-- **Automated alerts**: renewal daemon fires Telegram alerts 3 days + 1 day before each charge
+- **Automated alerts**: push notifications fire 3 days + 1 day before each charge, plus price-hike and trial-ending alerts
 - **Full lifecycle**: detect → audit → negotiate → cancel → track savings
 
 ---
@@ -78,5 +78,5 @@ Bot asks if you want to try for a discount first, drafts a retention email, offe
 | `token usage` | API token ROI analysis |
 | `what renews this month` | Upcoming renewals |
 | `cancel [service]` | Negotiation + cancellation flow |
-| `export` | Send CSV report to Telegram |
+| `export` | Generate CSV report |
 | `add [service] $X/month` | Manually add a subscription |

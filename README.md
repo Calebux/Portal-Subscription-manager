@@ -4,7 +4,6 @@
 
 **Live now →**
 - Web: [subbotai.xyz](https://subbotai.xyz)
-- Telegram: [@SubmanagerAgentBot](https://t.me/SubmanagerAgentBot)
 - SubBotCredits: [`0x4CB0d47BA5F40A5ffDc9BfF6D7810D9a887853B1`](https://celoscan.io/address/0x4CB0d47BA5F40A5ffDc9BfF6D7810D9a887853B1)
 
 ---
@@ -32,11 +31,9 @@ The average developer or knowledge worker is bleeding **$300-500/month** across 
 
 SubBot is an autonomous AI agent — not a dashboard you check once and forget.
 
-### It acts without being asked
+### It watches without being asked
 
-Every morning at 9:05am, SubBot's digest agent wakes up independently. It loads every user's subscription portfolio, feeds it to the LLM, and asks: *is there anything worth telling this person today?*
-
-If a subscription renews in 4 days — you get a message. If you crossed your budget — you get a message. If nothing is actionable — silence. **The agent decides.**
+Renewal reminders, price-hike alerts, and free-trial-ending warnings fire as OS-level push notifications straight from your subscription data — no need to open the app and check. Every scan or import updates that data, and the dashboard schedules the right alert automatically.
 
 ### The LLM does the reasoning, not hardcoded rules
 
@@ -52,7 +49,7 @@ Every recommendation creates an immutable transaction on Celo mainnet via `SubBo
 
 ### Gmail scan finds everything
 
-Connect Gmail (via the Telegram bot or web app) and SubBot scans 120 days of receipts across 50+ known billing patterns — Stripe, Apple, Google Play, PayPal, direct merchants. It catches subscriptions you forgot existed.
+Connect Gmail and SubBot scans 120 days of receipts across 50+ known billing patterns — Stripe, Apple, Google Play, PayPal, direct merchants. It catches subscriptions you forgot existed. A bank/card statement CSV import catches the ones that never sent a receipt email at all.
 
 ### Negotiation emails with real leverage
 
@@ -94,7 +91,7 @@ The vault integrates directly with **Aave v3 on Celo** — your cUSD deposit ear
 
 ## Login with Web3Auth
 
-No seed phrase. No wallet extension. No Telegram ID required.
+No seed phrase. No wallet extension required.
 
 Sign in with Google, Twitter, Discord, or email. Web3Auth issues a verified JWT; SubBot validates it and creates your isolated account. GoodDollar users can sign in with the same social login they already use — zero friction.
 
@@ -105,54 +102,38 @@ Works natively with **MiniPay** (Opera Mini's built-in wallet). Multi-currency s
 ## Architecture
 
 ```
-                    ┌─────────────────────────────────┐
-                    │   AUTONOMOUS AGENT LAYER          │
-                    │                                   │
-  9:00am daily ───► │  subscription-alerts.py           │
-  9:05am daily ───► │  agent-digest.py    (LLM loop)    │
-  Mon 8:00am  ───► │  llm-analyze.py     (LLM audit)   │
-                    └──────────────┬───────────────────┘
-                                   │ decisions + credits ops
-                                   ▼
-                    ┌─────────────────────────────────┐
-                    │   CELO MAINNET                    │
-                    │                                   │
-                    │   SubBotCredits.sol               │
-                    │   — G$ deposit / withdraw         │
-                    │   — agent spends from credits     │
-                    │   — user withdraws anytime        │
-                    │                                   │
-                    │   SubBotLog.sol                   │
-                    │   — immutable decision log        │
-                    │   — savings tracker               │
-                    └─────────────────────────────────┘
-
-User (Telegram / Web / MiniPay)
+User (Web / MiniPay)
       │
       ▼
-Hermes Gateway  (Hermes-4-70B · Nous inference API)
+Web Dashboard + Chrome Extension  (Vanilla JS · Tailwind · PWA · MiniPay-ready)
+      │  session-token-authenticated requests
+      ▼
+API Bridge  (Node.js · subbotai.xyz)
       │
-      ├── llm-analyze.py      ← LLM portfolio reasoning
-      ├── negotiate.py        ← LLM negotiation strategy
-      ├── gmail-scanner.py    ← IMAP scan, 50+ services
-      ├── export.py           ← CSV → Telegram
-      ├── currency.py         ← Live FX, 6hr cache
-      └── sync-to-web.py      ← Push to API bridge
+      ├── POST /auth/verify-web3auth  ← JWKS JWT verification, issues session token
+      ├── POST /scan, /import-statement ← spawns the Python scanners below
+      ├── POST /audit, /negotiate     ← spawns llm-analyze.py / negotiate.py
+      ├── POST /log-decision          ← internal-token gated, writes to Celo contract
+      ├── GET  /balance               ← G$ / cUSD balance via RPC
+      └── serves public/              ← PWA dashboard
+      │
+      ▼
+Python scanners & agents  (spawned per-request, share sub_store.py for storage)
+      ├── gmail-scanner.py       ← IMAP scan, 50+ services + trial detection
+      ├── statement-scanner.py  ← bank/card CSV → recurring-charge detection
+      ├── llm-analyze.py        ← LLM portfolio reasoning
+      ├── negotiate.py          ← LLM negotiation strategy
+      ├── export.py             ← CSV report generation
+      └── currency.py           ← Live FX, 6hr cache
            │
            ▼
-      API Bridge  (Node.js · subbotai.xyz)
-           │
-           ├── POST /auth/verify-web3auth  ← JWKS JWT verification
-           ├── POST /log-decision          ← writes to Celo contract
-           ├── POST /audit                 ← triggers LLM analysis
-           ├── POST /delete-sub            ← remove subscription
-           ├── POST /update-sub            ← edit subscription
-           ├── GET  /balance               ← G$ / cUSD balance via RPC
-           └── serves public/              ← PWA dashboard
-                │
-                ▼
-           Web Dashboard + Chrome Extension
-           (Vanilla JS · Tailwind · PWA · MiniPay-ready)
+CELO MAINNET
+      SubBotCredits.sol  — G$ deposit / withdraw, agent spends from credits
+      SubBotLog.sol      — immutable decision log, savings tracker
+
+Renewal / price-hike / trial-conversion alerts fire as OS push notifications
+computed client-side (public/sw.js) from data already synced via /subs —
+no server-side push infrastructure needed.
 ```
 
 ---
@@ -174,14 +155,8 @@ G$ credit system. Users deposit GoodDollar tokens, agent spends them for operati
 **Web app (no setup):**
 1. Open [subbotai.xyz](https://subbotai.xyz)
 2. Sign in with Web3Auth (Google, email, or wallet)
-3. Add subscriptions with **+** or scan Gmail
+3. Add subscriptions with **+**, scan Gmail, or import a bank/card statement CSV
 4. Dashboard, Audit, and Alerts update in real time
-
-**Telegram:**
-1. Message [@SubmanagerAgentBot](https://t.me/SubmanagerAgentBot)
-2. `/scan` — scan Gmail for subscriptions
-3. `/audit` — LLM portfolio analysis
-4. `/negotiate Netflix` — generate retention email
 
 ---
 
@@ -191,22 +166,22 @@ G$ credit system. Users deposit GoodDollar tokens, agent spends them for operati
 git clone https://github.com/Calebux/Portal-Subscription-manager
 cd Portal-Subscription-manager
 npm install
-pip install hermes-agent && hermes setup
+cp .env.example .env   # fill in the values below
 
-# Configure ~/.hermes/.env
-TELEGRAM_BOT_TOKEN=your_token
+# Required in .env
 OPENAI_API_KEY=your_nous_key
 OPENAI_BASE_URL=https://inference-api.nousresearch.com/v1
-
-# Configure .env
 AGENT_PRIVATE_KEY=0x...
 LOG_CONTRACT_ADDRESS=0x5bc06976e5b46fd624195EFdD0bFC45a73569003
 CREDITS_CONTRACT_ADDRESS=0xdF61E8D2a22e456a87998Ab78d00E57d099660e8
+SESSION_SECRET=          # any long random string — signs user session tokens
+INTERNAL_SERVICE_TOKEN=  # any long random string — shared secret for the cron scripts
 
 # Start
-node api-bridge.js        # Terminal 1 — API bridge
-hermes gateway run        # Terminal 2 — Telegram agent
+node api-bridge.js
 ```
+
+Weekly LLM portfolio re-analysis runs via cron — see `crontab-setup.sh`.
 
 ### Deploy to VPS
 
@@ -221,15 +196,18 @@ ssh root@your-server "bash ~/deploy-vps.sh"
 
 | File | What it does |
 |------|-------------|
-| `agent-digest.py` | Autonomous daily agent — LLM reviews all users, sends briefings |
 | `llm-analyze.py` | LLM portfolio reasoning — contextual judgment over subscriptions |
 | `negotiate.py` | LLM negotiation emails with real user leverage |
 | `contracts/SubBotLog.sol` | On-chain decision audit trail (Celo) |
 | `contracts/SubBotCredits.sol` | G$ credit system — deposit, spend, withdraw |
-| `subscription-alerts.py` | Renewal daemon — alerts 3 and 1 day before charges |
-| `gmail-scanner.py` | IMAP scanner — 50+ billing patterns |
-| `api-bridge.js` | Node.js bridge — auth, Celo logging, credits ops, serves PWA |
+| `gmail-scanner.py` | IMAP scanner — 50+ billing patterns, trial detection |
+| `statement-scanner.py` | Bank/card statement CSV import — recurring-charge detection |
+| `sub_store.py` | Shared per-user JSON store — merge logic, price history, file locking |
+| `load_env.py` | Minimal `.env` loader shared by the standalone Python scripts |
+| `cancel-urls.json` | Merchant → cancellation-page URL map, shared by the API and scanners |
+| `api-bridge.js` | Node.js bridge — auth, session tokens, Celo logging, credits ops, serves PWA |
 | `public/` | Web dashboard — PWA, light/dark theme, Web3Auth, MiniPay-ready |
+| `public/sw.js` | Service worker — schedules renewal/price-hike/trial push notifications |
 | `extension/` | Chrome extension — same UI, offline-capable |
 | `deploy-vps.sh` | One-command VPS deployment with systemd |
 
